@@ -1,0 +1,103 @@
+# 어디갈래?
+
+**취향은 모으고, 결정은 함께!** — 친구들이 여행 취향과 조건을 모으고, 후보를 비교하고, 다수결·룰렛·연타 게임으로 최종 결정을 내리는 모임 보드.
+
+- Next.js 16 (App Router, Turbopack) · TypeScript · Tailwind CSS v4 · Lucide 아이콘
+- Neon PostgreSQL (`@neondatabase/serverless`) / 로컬 개발용 PGlite(내장 Postgres)
+- 입력 검증: zod · 테스트: vitest + API 스모크 스크립트
+
+## 빠른 시작
+
+```bash
+npm install
+npm run dev          # http://localhost:3000
+```
+
+`DATABASE_URL` 없이 실행하면 **로컬 내장 DB(PGlite)** 를 자동으로 사용합니다. 데이터는 `.data/pglite/`에 저장되고 서버를 재시작해도 남습니다.
+처음 화면의 “데모 모임으로 둘러보기”를 누르면 가상 참가자 3명(민지·준호·서연)과 후보가 채워진 모임이 만들어집니다.
+
+| 명령 | 설명 |
+| --- | --- |
+| `npm run dev` | 개발 서버 |
+| `npm run build` / `npm start` | 프로덕션 빌드 / 실행 |
+| `npm test` | 추천·필터링·결정 로직 단위 테스트 (vitest) |
+| `npm run smoke` | **서버 실행 중**에 여러 참가자로 전체 흐름 검증 (`BASE_URL=http://localhost:3000` 기본) |
+| `npm run db:migrate` | Neon DB에 `db/schema.sql` 적용 |
+| `npm run lint` | ESLint |
+
+## DB 설정 (Neon)
+
+1. [Neon](https://neon.tech)에서 프로젝트를 만들고 **Connection string (Pooled)** 을 복사합니다.
+2. `.env.local.example`을 `.env.local`로 복사하고 `DATABASE_URL`에 붙여넣습니다. (실제 값은 커밋하지 마세요. `.env*`는 gitignore 대상)
+3. 스키마 적용: `npm run db:migrate`
+4. `npm run dev` → 화면 아래에 “로컬 개발 DB(PGlite) 사용 중” 문구가 **사라지면** Neon에 연결된 것입니다.
+
+### 데모 데이터 vs 실제 DB — 무엇이 다른가
+
+| 구분 | 동작 |
+| --- | --- |
+| 로컬 PGlite (`DATABASE_URL` 없음) | Neon과 **같은 SQL**을 실행하는 실제 Postgres. 단, 이 PC의 서버 프로세스 하나에서만 공유됩니다. 같은 와이파이의 휴대폰으로 `http://<PC IP>:3000` 접속 시 다중 사용자 테스트 가능. |
+| Neon (`DATABASE_URL` 있음) | 서버리스 인스턴스 여러 개가 같은 DB를 공유 → 배포 환경에서 실제 멀티 유저. |
+| 데모 모임 (`/demo`) | 어느 DB를 쓰든 일반 모임과 똑같이 저장됩니다. 다만 가상 참가자 3명은 **토큰이 없는 봇**이라 투표·게임에 참여하지 않습니다(방장이 투표 마감 가능). |
+| Vercel에서 `DATABASE_URL` 누락 | 로컬 DB로 몰래 동작하지 않고 “데이터베이스가 설정되지 않았어요” 오류를 반환합니다. |
+
+> 이 저장소에서 검증한 것은 **로컬 PGlite** 기준입니다. Neon 연결은 연결 문자열이 없어 실제로 실행해보지 못했습니다. 같은 SQL을 쓰지만, 최초 연결 후 `npm run smoke`를 한 번 돌려 확인하세요.
+
+## Vercel 배포
+
+1. GitHub에 push → Vercel에서 Import.
+2. Project Settings → Environment Variables에 `DATABASE_URL` 추가 (Production/Preview). Vercel의 Neon 통합을 쓰면 자동으로 들어갑니다.
+3. 배포 전 로컬에서 `npm run db:migrate`로 스키마를 한 번 적용합니다.
+4. 배포 후 `BASE_URL=https://<배포주소> npm run smoke`로 확인.
+
+## 구조
+
+```
+db/schema.sql                    테이블 정의 (Room, Member, TastePreference, DecisionCard,
+                                 MemberCondition, Candidate, Vote, BattleEntry, DecisionResult)
+scripts/migrate.mjs              Neon 스키마 적용
+scripts/smoke.mjs                다중 사용자 API 시나리오 검증 (28개)
+src/lib/domain/                  ★ 순수 로직 (UI·DB와 무관, 테스트 대상)
+  constants.ts                   취향·캐릭터·제외 조건·타이밍 상수
+  evaluate.ts                    필수 조건 판정, 취향 점수(3/2/1), 추천 이유, 카드 상태
+  decide.ts                      다수결 집계, 균등 추첨, 룰렛 각도, 연타 검증
+  domain.test.ts                 단위 테스트
+src/lib/validation.ts            zod 입력 스키마 (API 액션 전체)
+src/lib/server/                  서버 전용 (import "server-only")
+  db.ts                          Neon / PGlite 어댑터
+  session.ts                     참여 토큰(httpOnly 쿠키, DB엔 SHA-256 해시만), 초대 코드
+  rooms.ts                       상태 조회·권한 검사·모든 액션 처리
+src/app/api/...                  REST 라우트 (rooms, invite, demo, state, actions)
+src/components/ui/               Button, StatusBadge, Sheet(바텀시트↔오른쪽 패널), EmptyState …
+src/components/room/             RoomProvider(주기 조회), RoomHeader, MemberStatusList, DecisionCard,
+                                 TasteRankPicker, ConditionForm, CandidateForm/List, ReasonList, ConfirmedPlan
+src/components/decision/         DecisionFlow(공통 레이아웃), DecisionModePicker, VotingPanel,
+                                 RoulettePanel, ClickBattlePanel, ResultReveal(공통 결과)
+```
+
+## 핵심 규칙
+
+- **필수 조건**(예산, 제외 음식/활동/숙소 조건)에 걸리면 `조건 충돌` → 결정 대상에서 제외.
+- 비용·특징 정보가 없거나 조건 미입력 참가자가 있으면 `확인 필요` → 통과로 보지 않음(결정 대상 제외).
+- **선호 조건**(실내/야외, 분위기, 원하는 점, 의견)은 참고 문구로만 표시, 점수·차단 없음.
+- 취향 점수: 1순위 3점 · 2순위 2점 · 3순위 1점 합산. 순위는 참고용.
+- 결정 시작 시점의 통과 후보를 `pool`로 고정하고, 결정 중에는 후보·조건 수정을 잠급니다.
+- 다수결: `(card, member, round)` 기본키로 1인 1표. 마감 전 득표수·타인 선택 비공개. 동점 → 동점 후보만 룰렛.
+- 룰렛: 서버가 `crypto.randomInt`로 먼저 당첨을 정하고, 화면은 그 칸에서 멈추는 회전만 보여줌.
+- 쟁탈전: 서버 시각 기준 3초 카운트다운 + 10초. 클라이언트는 0.3초마다 횟수 묶음을 보내고, 서버는
+  구간 밖 입력 거절 · 초당 15회 상한 · 한 묶음은 최근 1초분까지만 인정. 키 자동 반복은 클라이언트에서 무시.
+- 결과는 `(card, round)` 기본키로 중복 생성 불가, 확정은 조건부 UPDATE로 한 번만.
+- 방장: 결정 시작/마감/룰렛/게임 시작/확정/카드 잠금/결정 취소·다시 정하기.
+
+## 실시간 동기화
+
+WebSocket 대신 **주기적 조회**: 평소 3초, 쟁탈전·집계 중 1초, 탭이 숨겨지면 중지. 모든 변경은 서버에 먼저 저장된 뒤 재조회됩니다.
+
+## 남은 작업 / 알려진 한계
+
+- Neon 실제 연결 검증 (연결 문자열 필요).
+- 참가자 내보내기·나가기, 방장 위임 없음 → 조건을 입력하지 않는 참가자가 있으면 후보가 `확인 필요`로 남아 결정이 막힐 수 있음(방장이 그 친구에게 입력을 요청해야 함).
+- 다른 기기에서 같은 참가자로 다시 로그인하는 기능 없음(참여 토큰은 브라우저 쿠키에만 있음).
+- 요청 빈도 제한(rate limit) 없음.
+- 주기 조회 방식이라 반영까지 최대 약 3초 지연.
+- 결정 카드 이름·날짜 수정 UI 없음(생성 시에만 설정).

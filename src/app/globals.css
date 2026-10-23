@@ -1,0 +1,188 @@
+@import "tailwindcss";
+
+/* ───── 디자인 토큰 ───── */
+@theme {
+  --color-coral: #ff755e;
+  --color-coral-strong: #e9553d; /* 흰 글자를 올리는 주요 버튼 배경 */
+  --color-coral-soft: #ffe9e4;
+  --color-ink: #252d3b;
+  --color-ink-soft: #545e70;
+  --color-ink-faint: #8a92a1;
+  --color-cream: #f5f1ea;
+  --color-cream-deep: #ece6db;
+  --color-line: #e6e0d5;
+  --color-success: #e6f4ea;
+  --color-success-ink: #1d7442;
+  --color-info: #e8f0ff;
+  --color-info-ink: #2a59c2;
+  --color-warning: #fff1d6;
+  --color-warning-ink: #8f5c05;
+  --color-danger: #fde9e6;
+  --color-danger-ink: #bf3427;
+
+  --font-sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
+    "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+
+  --radius-card: 16px;
+
+  --animate-rise-in: rise-in 360ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-pop: pop 420ms cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
+  --animate-gather: gather 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-count: count 900ms ease-out both;
+  --animate-crown: crown 700ms cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
+  --animate-confirm: confirm 1400ms ease-out both;
+  --animate-sheet-up: sheet-up 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-sheet-left: sheet-left 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-fade: fade 200ms ease-out both;
+
+  @keyframes rise-in {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes pop {
+    0% {
+      transform: scale(0.5);
+      opacity: 0;
+    }
+    60% {
+      transform: scale(1.2);
+      opacity: 1;
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+  @keyframes gather {
+    from {
+      opacity: 0;
+      transform: translateX(var(--from-x, 0)) scale(0.9);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0) scale(1);
+    }
+  }
+  @keyframes count {
+    0% {
+      transform: scale(1.6);
+      opacity: 0;
+    }
+    25% {
+      transform: scale(1);
+      opacity: 1;
+    }
+    85% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0.2;
+      transform: scale(0.9);
+    }
+  }
+  @keyframes crown {
+    0% {
+      transform: translateY(-14px) rotate(-12deg);
+      opacity: 0;
+    }
+    70% {
+      transform: translateY(2px) rotate(4deg);
+      opacity: 1;
+    }
+    100% {
+      transform: translateY(0) rotate(0);
+    }
+  }
+  @keyframes confirm {
+    0% {
+      box-shadow: 0 0 0 0 rgba(29, 116, 66, 0.45);
+      background-color: var(--color-success);
+    }
+    100% {
+      box-shadow: 0 0 0 14px rgba(29, 116, 66, 0);
+    }
+  }
+  @keyframes sheet-up {
+    from {
+      transform: translateY(24px);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+  @keyframes sheet-left {
+    from {
+      transform: translateX(24px);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+  @keyframes fade {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+}
+
+/* 기본 스타일은 base 레이어에 두어 Tailwind 유틸리티(outline-none 등)가 덮어쓸 수 있게 한다 */
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background: var(--color-cream);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+  }
+
+  /* 키보드 사용자를 위한 포커스 표시 */
+  :focus-visible {
+    outline: 2px solid var(--color-coral-strong);
+    outline-offset: 2px;
+  }
+
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}
+
+/* 순서대로 등장 (style="--i: n") */
+.stagger {
+  animation: var(--animate-rise-in);
+  animation-delay: calc(var(--i, 0) * 60ms);
+}
+
+/* 룰렛: 빠르게 돌다가 자연스럽게 감속 */
+.roulette-wheel {
+  transition: transform 4.6s cubic-bezier(0.12, 0.72, 0.12, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}
