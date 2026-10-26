@@ -91,8 +91,19 @@ export function evaluateCandidate(
   }
 
   if (missingConditions > 0) needsCheck.push(`아직 조건을 입력하지 않은 참가자 ${missingConditions}명`);
-  if (budgetUnknown) needsCheck.push("예상 비용 정보가 없어 예산을 확인할 수 없어요");
-  if (featuresUnknown) needsCheck.push(`${restriction.candidateLabel} 정보가 없어 제외 조건을 확인할 수 없어요`);
+  const notes = candidate.notes ?? {};
+  if (budgetUnknown) {
+    needsCheck.push(
+      notes.cost ? `비용이 ‘${notes.cost}’(으)로 적혀 있어 예산을 확인할 수 없어요` : "예상 비용 정보가 없어 예산을 확인할 수 없어요",
+    );
+  }
+  if (featuresUnknown) {
+    needsCheck.push(
+      notes.features
+        ? `${restriction.candidateLabel}이(가) ‘${notes.features}’(으)로 적혀 있어 제외 조건을 확인할 수 없어요`
+        : `${restriction.candidateLabel} 정보가 없어 제외 조건을 확인할 수 없어요`,
+    );
+  }
 
   // 이유 문구: 막는 이유 → 확인 필요 → 통과 근거 → 취향 → 참고 순서
   if (budgetConflicts > 0) reasons.push({ tone: "bad", text: `예산 조건 ${budgetConflicts}건과 충돌` });
@@ -124,13 +135,13 @@ export function evaluateCandidate(
   }
 
   // 선호 조건은 참고 정보만 제공 (점수 반영 없음)
-  if (candidate.setting !== "unknown") {
+  if (candidate.setting !== "unknown" && candidate.setting !== "other") {
     const n = conditions.filter(
       (c) => c.setting !== "any" && (candidate.setting === "both" || c.setting === candidate.setting),
     ).length;
     if (n > 0) reasons.push({ tone: "info", text: `${n}명의 실내·야외 선호와 맞아요 (참고)` });
   }
-  if (candidate.vibe !== "unknown") {
+  if (candidate.vibe !== "unknown" && candidate.vibe !== "other") {
     const n = conditions.filter((c) => c.vibe === candidate.vibe).length;
     if (n > 0) reasons.push({ tone: "info", text: `${n}명의 분위기 선호와 맞아요 (참고)` });
   }
@@ -167,14 +178,13 @@ export function evaluateCandidates(input: EvaluateInput): CandidateEvaluation[] 
   }));
 }
 
-/** 결정 대상 여부. 조건 충돌 후보는 안내만 하고 포함하며, 판정할 수 없는 확인 필요 후보만 뺀다. */
-export function isDecidable(state: CheckState): boolean {
-  return state !== "needs_check";
-}
-
-/** 결정 대상 후보 id (통과 + 조건 충돌). 결정 방식은 이 목록만 대상으로 한다. */
-export function eligibleCandidateIds(evaluations: CandidateEvaluation[]): string[] {
-  return evaluations.filter((e) => isDecidable(e.state)).map((e) => e.candidateId);
+/**
+ * 결정 후보 풀. 조건 충돌·확인 필요 후보도 자동으로 빼지 않고, 방장이 결정 시작 전에 고른 후보만 뺀다.
+ * 순서는 평가 순서(통과 → 확인 필요 → 충돌, 취향 점수 순)를 따른다.
+ */
+export function decisionPool(evaluations: CandidateEvaluation[], excludeIds: readonly string[] = []): string[] {
+  const excluded = new Set(excludeIds);
+  return evaluations.map((e) => e.candidateId).filter((id) => !excluded.has(id));
 }
 
 export function cardDisplayStatus(

@@ -13,11 +13,12 @@ import {
   type VibeKey,
 } from "@/lib/domain/constants";
 import { battleWindow, acceptedTaps, pickUniform, rankBattle, tallyVotes } from "@/lib/domain/decide";
-import { cardDisplayStatus, eligibleCandidateIds, evaluateCandidates } from "@/lib/domain/evaluate";
+import { cardDisplayStatus, decisionPool, evaluateCandidates } from "@/lib/domain/evaluate";
 import type {
   BattleDetail,
   Candidate,
   CandidateEvaluation,
+  CandidateNotes,
   CandidateSetting,
   CandidateSnapshot,
   CandidateVibe,
@@ -161,6 +162,7 @@ function mapCandidate(r: Row): Candidate {
     features: r.features === null ? null : json<string[]>(r.features),
     setting: r.setting as CandidateSetting,
     vibe: r.vibe as CandidateVibe,
+    notes: r.notes ? json<CandidateNotes>(r.notes) : {},
     link: str(r.link),
     description: str(r.description),
     createdAt: num(r.created_at),
@@ -249,7 +251,7 @@ function evaluateCard(data: RoomData, card: CardRow): CandidateEvaluation[] {
 }
 
 function snapshot(c: Candidate): CandidateSnapshot {
-  return { id: c.id, name: c.name, cost: c.cost, tags: c.tags, description: c.description, link: c.link };
+  return { id: c.id, name: c.name, cost: c.cost, costNote: c.notes.cost, tags: c.tags, description: c.description, link: c.link };
 }
 
 function goodReasons(evaluations: CandidateEvaluation[], candidateId: string): string[] {
@@ -478,7 +480,7 @@ const DEMO_BOTS: { nickname: string; character: CharacterKey; color: ColorKey; t
   { nickname: "서연", character: "bird", color: "violet", taste: ["nature", "photo", "culture"], budget: null, restrictions: { meal: ["매운 음식"], activity: [], stay: [] } },
 ];
 
-type DemoCandidate = Omit<CandidateFields, "link" | "description"> & { description: string };
+type DemoCandidate = Omit<CandidateFields, "link" | "description" | "notes"> & { description: string };
 const DEMO_CANDIDATES: Record<string, DemoCandidate[]> = {
   lunch: [
     { name: "항구 앞 생선구이 정식", cost: 15000, tags: ["food"], features: ["해산물"], setting: "indoor", vibe: "lively", description: "점심 특선 정식, 웨이팅 20분 정도" },
@@ -583,7 +585,14 @@ function validateOptions(category: CardCategory, values: string[]) {
 }
 
 function candidateParams(c: CandidateFields) {
-  return [c.name, c.cost, JSON.stringify(c.tags), c.features === null ? null : JSON.stringify(c.features), c.setting, c.vibe, c.link, c.description];
+  // 기타 내용은 실제로 '기타'(값 없음)를 고른 항목만 남긴다
+  const notes: CandidateNotes = {
+    ...(c.cost === null && c.notes.cost ? { cost: c.notes.cost } : {}),
+    ...(c.features === null && c.notes.features ? { features: c.notes.features } : {}),
+    ...(c.setting === "other" && c.notes.setting ? { setting: c.notes.setting } : {}),
+    ...(c.vibe === "other" && c.notes.vibe ? { vibe: c.notes.vibe } : {}),
+  };
+  return [c.name, c.cost, JSON.stringify(c.tags), c.features === null ? null : JSON.stringify(c.features), c.setting, c.vibe, c.link, c.description, JSON.stringify(notes)];
 }
 
 async function insertResult(
@@ -700,8 +709,8 @@ export async function performAction(roomId: string, token: string | null, action
         throw new AppError(409, `후보는 카드당 ${LIMITS.maxCandidates}개까지 등록할 수 있어요.`);
       }
       await db.query(
-        `INSERT INTO candidates (id, card_id, room_id, created_by, name, cost, tags, features, setting, vibe, link, description, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9, $10, $11, $12, $13, $13)`,
+        `INSERT INTO candidates (id, card_id, room_id, created_by, name, cost, tags, features, setting, vibe, link, description, notes, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9, $10, $11, $12, $13::jsonb, $14, $14)`,
         [newId("cand"), card.id, roomId, me.id, ...candidateParams(action.candidate), now],
       );
       return;
@@ -721,7 +730,7 @@ export async function performAction(roomId: string, token: string | null, action
       if (action.candidate.features) validateOptions(card.category, action.candidate.features);
       await db.query(
         `UPDATE candidates SET name = $1, cost = $2, tags = $3::jsonb, features = $4::jsonb, setting = $5, vibe = $6, link = $7,
-           description = $8, updated_at = $9 WHERE id = $10`,
+           description = $8, notes = $9::jsonb, updated_at = $10 WHERE id = $11`,
         [...candidateParams(action.candidate), now, cand.id],
       );
       return;
@@ -731,16 +740,23 @@ export async function performAction(roomId: string, token: string | null, action
       requireHost(me);
       const card = requireCard(data, action.cardId);
       if (card.stage !== "open") throw new AppError(409, "이미 결정이 진행 중이거나 확정된 카드예요.");
-      const eligible = eligibleCandidateIds(evaluateCard(data, card));
-      if (eligible.length === 0) {
-        throw new AppError(409, "결정할 수 있는 후보가 없어요. 확인 필요 후보의 정보를 채우거나 후보를 추가해주세요.", "NO_ELIGIBLE");
+      // 조건 충돌·확인 필요 후보도 기본으로 포함하고, 방장이 검토 단계에서 뺀 후보만 제외한다
+      const pool = decisionPool(evaluateCard(data, card), action.excludeIds);
+      if (pool.length === 0) {
+        throw new AppError(
+          409,
+          data.candidates.some((c) => c.cardId === card.id)
+            ? "모든 후보를 제외하면 결정할 수 없어요. 결정에 넣을 후보를 하나 이상 남겨주세요."
+            : "아직 등록된 후보가 없어요. 후보를 먼저 등록해주세요.",
+          "NO_ELIGIBLE",
+        );
       }
       const phase: CardPhase = action.mode === "vote" ? "voting" : action.mode === "roulette" ? "roulette_ready" : "battle_lobby";
       const rows = await db.query(
         `UPDATE decision_cards SET stage = 'deciding', mode = $1, phase = $2, pool = $3::jsonb, tie_ids = '[]'::jsonb,
            phase_started_at = $4, battle_winner_id = NULL, updated_at = $4
          WHERE id = $5 AND stage = 'open' AND round = $6 RETURNING id`,
-        [action.mode, phase, JSON.stringify(eligible), now, card.id, card.round],
+        [action.mode, phase, JSON.stringify(pool), now, card.id, card.round],
       );
       if (rows.length === 0) throw new AppError(409, "다른 사람이 먼저 결정을 시작했어요.");
       return;
@@ -793,11 +809,10 @@ export async function performAction(roomId: string, token: string | null, action
       const card = requireCard(data, action.cardId);
       requirePhase(card, "roulette_ready", "룰렛을 돌릴 수 있는 단계가 아니에요.");
       const evaluations = evaluateCard(data, card);
-      const eligible = new Set(eligibleCandidateIds(evaluations));
       const fromTie = card.tieIds.length > 0;
       // 결과를 먼저 정하고, 화면의 회전은 이 결과를 보여주기만 한다
-      const poolIds = (fromTie ? card.tieIds : card.pool).filter((id) => eligible.has(id));
-      const pool = poolIds.map((id) => data.candidates.find((c) => c.id === id)!).filter(Boolean);
+      const poolIds = fromTie ? card.tieIds : card.pool;
+      const pool = poolIds.map((id) => data.candidates.find((c) => c.id === id)).filter((c) => c !== undefined);
       if (pool.length === 0) throw new AppError(409, "룰렛에 넣을 수 있는 후보가 없어요. 결정을 다시 진행해주세요.");
       const { item, index } = pickUniform(pool, secureRandom);
       await insertResult(
@@ -868,8 +883,7 @@ export async function performAction(roomId: string, token: string | null, action
       requirePhase(card, "battle_picking", "지금은 장소를 고를 수 있는 단계가 아니에요.");
       if (card.battleWinnerId !== me.id) throw new AppError(403, "결정권자만 장소를 고를 수 있어요.");
       const evaluations = evaluateCard(data, card);
-      const eligible = eligibleCandidateIds(evaluations);
-      if (!card.pool.includes(action.candidateId) || !eligible.includes(action.candidateId)) {
+      if (!card.pool.includes(action.candidateId)) {
         throw new AppError(400, "결정 대상 후보만 고를 수 있어요.");
       }
       const candidate = data.candidates.find((c) => c.id === action.candidateId)!;

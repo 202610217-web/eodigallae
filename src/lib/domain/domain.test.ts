@@ -10,7 +10,7 @@ import {
 } from "./decide";
 import {
   cardDisplayStatus,
-  eligibleCandidateIds,
+  decisionPool,
   evaluateCandidate,
   evaluateCandidates,
   memberTasteScore,
@@ -48,6 +48,7 @@ function cand(id: string, patch: Partial<Candidate> = {}): Candidate {
     cost: 10000,
     tags: [],
     features: [],
+    notes: {},
     setting: "unknown",
     vibe: "unknown",
     link: "",
@@ -153,7 +154,7 @@ describe("필수 조건 검사", () => {
 });
 
 describe("후보 순위와 결정 대상", () => {
-  it("통과 > 확인 필요 > 충돌 순이고, 확인 필요 후보만 결정 대상에서 빠짐", () => {
+  it("통과 > 확인 필요 > 충돌 순이고, 문제 있는 후보도 자동으로 빠지지 않음 (방장이 고른 것만 제외)", () => {
     const conditions = [cond("a", { maxBudget: 15000 }), cond("b"), cond("c")];
     const evals = evaluateCandidates({
       category: "meal",
@@ -167,8 +168,21 @@ describe("후보 순위와 결정 대상", () => {
       ],
     });
     expect(evals.map((e) => e.candidateId)).toEqual(["best", "low", "unknown", "over"]);
-    expect(eligibleCandidateIds(evals)).toEqual(["best", "low", "over"]);
+    expect(decisionPool(evals)).toEqual(["best", "low", "unknown", "over"]);
+    expect(decisionPool(evals, ["unknown", "over", "없는-id"])).toEqual(["best", "low"]);
     expect(evals.filter((e) => e.recommended).map((e) => e.candidateId)).toEqual(["best"]);
+  });
+
+  it("기타로 적은 비용·특징은 확인 필요 이유에 그대로 보여줌", () => {
+    const conditions = [cond("a", { maxBudget: 15000, restrictions: ["해산물"] }), cond("b"), cond("c")];
+    const e = evaluateCandidate(cand("x", { cost: null, features: null, notes: { cost: "메뉴마다 달라요", features: "시장 안 여러 가게" } }), {
+      category: "meal",
+      members,
+      conditions,
+    });
+    expect(e.state).toBe("needs_check");
+    expect(e.needsCheck.some((t) => t.includes("메뉴마다 달라요"))).toBe(true);
+    expect(e.needsCheck.some((t) => t.includes("시장 안 여러 가게"))).toBe(true);
   });
 
   it("후보가 없으면 빈 배열", () => {
@@ -183,7 +197,7 @@ describe("후보 순위와 결정 대상", () => {
       conditions,
       candidates: [cand("x", { tags: ["food"] }), cand("y")],
     });
-    expect(eligibleCandidateIds(evals)).toEqual(["x", "y"]);
+    expect(decisionPool(evals)).toEqual(["x", "y"]);
     expect(evals.some((e) => e.recommended)).toBe(false);
   });
 });

@@ -36,8 +36,9 @@ export interface MemberCondition {
   updatedAt: number;
 }
 
-export type CandidateSetting = "indoor" | "outdoor" | "both" | "unknown";
-export type CandidateVibe = "quiet" | "lively" | "unknown";
+// "unknown" = 고르지 않음, "other" = 기타(내용은 notes에)
+export type CandidateSetting = "indoor" | "outdoor" | "both" | "other" | "unknown";
+export type CandidateVibe = "quiet" | "lively" | "other" | "unknown";
 
 export interface Candidate {
   id: string;
@@ -51,9 +52,18 @@ export interface Candidate {
   features: string[] | null;
   setting: CandidateSetting;
   vibe: CandidateVibe;
+  /** '기타'를 고르고 적은 내용. 해당 값은 비용 null / 특징 null / 실내·야외·분위기 "other" */
+  notes: CandidateNotes;
   link: string;
   description: string;
   createdAt: number;
+}
+
+export interface CandidateNotes {
+  cost?: string;
+  features?: string;
+  setting?: string;
+  vibe?: string;
 }
 
 /** DB에 저장되는 카드 단계. 화면 상태(조건 수집 중/후보 확인)는 여기서 파생한다. */
@@ -75,6 +85,8 @@ export interface CandidateSnapshot {
   id: string;
   name: string;
   cost: number | null;
+  /** 비용을 '기타'로 적은 내용 (이전 결과에는 없음) */
+  costNote?: string;
   tags: TasteKey[];
   description: string;
   link: string;

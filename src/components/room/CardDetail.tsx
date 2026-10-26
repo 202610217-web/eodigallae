@@ -9,7 +9,6 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { cn } from "@/lib/client/cn";
 import { myCondition } from "@/lib/client/selectors";
 import { CATEGORY_LABEL } from "@/lib/domain/constants";
-import { isDecidable } from "@/lib/domain/evaluate";
 import type { DecisionCardView } from "@/lib/domain/types";
 import { CandidateForm } from "./CandidateForm";
 import { CandidateList } from "./CandidateList";
@@ -38,7 +37,7 @@ export function CardDetail({ card, initialTab, onClose }: { card: DecisionCardVi
   const [locking, setLocking] = useState(false);
   const reason = lockReason(card);
   const editable = reason === null;
-  const decidableCount = card.evaluations.filter((e) => isDecidable(e.state)).length;
+  const passCount = card.evaluations.filter((e) => e.state === "pass").length;
 
   const tabs: { key: DetailTab; label: string }[] = [
     { key: "conditions", label: "내 조건" },
@@ -62,7 +61,7 @@ export function CardDetail({ card, initialTab, onClose }: { card: DecisionCardVi
         <span className="flex flex-wrap items-center gap-2">
           <StatusBadge status={card.status} />
           <span>
-            {CATEGORY_LABEL[card.category]} · 후보 {card.candidates.length}개 · 결정 대상 {decidableCount}개
+            {CATEGORY_LABEL[card.category]} · 후보 {card.candidates.length}개 · 통과 {passCount}개
           </span>
         </span>
       }
@@ -105,7 +104,6 @@ export function CardDetail({ card, initialTab, onClose }: { card: DecisionCardVi
         {tab === "decision" && (
           <DecisionFlow
             card={card}
-            onEditConditions={() => setTab("conditions")}
             onAddCandidate={() => {
               setTab("candidates");
               if (editable) setAddOpen(true);

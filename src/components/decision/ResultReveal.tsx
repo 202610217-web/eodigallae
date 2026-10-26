@@ -3,7 +3,7 @@
 import { CalendarCheck, CircleCheck, Crown, ExternalLink, PartyPopper } from "lucide-react";
 import { useState } from "react";
 import { useRoom } from "@/components/room/RoomProvider";
-import { ConflictHint } from "@/components/room/ConflictHint";
+import { IssueHint } from "@/components/room/IssueHint";
 import { ReasonList } from "@/components/room/ReasonList";
 import { Button } from "@/components/ui/Button";
 import { Pill } from "@/components/ui/StatusBadge";
@@ -34,7 +34,7 @@ export function ResultReveal({ card, result }: { card: DecisionCardView; result:
             {confirmed ? "여행 보드에 확정됐어요" : `${card.title} 최종 결정`}
           </p>
           <h3 className="mt-1 text-2xl leading-tight font-extrabold break-words md:text-[28px]">{result.candidate.name}</h3>
-          <p className="mt-1 font-semibold text-ink-soft">{formatCost(result.candidate.cost)}</p>
+          <p className="mt-1 font-semibold text-ink-soft">{formatCost(result.candidate.cost, result.candidate.costNote)}</p>
           <div className="mt-2 flex flex-wrap gap-1.5">
             <Pill tone={confirmed ? "success" : "coral"} className="bg-white">
               {modeLabel(result.mode)}
@@ -44,7 +44,7 @@ export function ResultReveal({ card, result }: { card: DecisionCardView; result:
         </div>
         <div className="space-y-3 px-5 py-4">
           <TasteTags tags={result.candidate.tags} />
-          <ConflictHint evaluation={card.evaluations.find((e) => e.candidateId === result.candidate.id)} className="text-sm" />
+          <IssueHint evaluation={card.evaluations.find((e) => e.candidateId === result.candidate.id)} className="text-sm" />
           {result.candidate.description && <p className="text-sm">{result.candidate.description}</p>}
           <div>
             <p className="mb-1.5 text-sm font-bold">선택 이유</p>

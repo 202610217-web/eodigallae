@@ -2,7 +2,7 @@
 
 import { CircleCheck, Crown, Hand, Hourglass, Keyboard, Play, Trophy } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
-import { ConflictHint } from "@/components/room/ConflictHint";
+import { IssueHint } from "@/components/room/IssueHint";
 import { useRoom } from "@/components/room/RoomProvider";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
@@ -13,7 +13,6 @@ import { cn } from "@/lib/client/cn";
 import { formatCost } from "@/lib/client/format";
 import { BATTLE_TAP_MS } from "@/lib/domain/constants";
 import { battleWindow } from "@/lib/domain/decide";
-import { eligibleCandidateIds } from "@/lib/domain/evaluate";
 import type { DecisionCardView } from "@/lib/domain/types";
 import { ResultReveal } from "./ResultReveal";
 
@@ -239,8 +238,7 @@ function Picking({ card }: { card: DecisionCardView }) {
   const ranking = [...card.battle].sort((a, b) =>
     a.memberId === card.battleWinnerId ? -1 : b.memberId === card.battleWinnerId ? 1 : (b.taps ?? 0) - (a.taps ?? 0),
   );
-  const eligible = new Set(eligibleCandidateIds(card.evaluations));
-  const options = card.pool.filter((id) => eligible.has(id)).map((id) => card.candidates.find((c) => c.id === id)!).filter(Boolean);
+  const options = card.pool.map((id) => card.candidates.find((c) => c.id === id)).filter((c) => c !== undefined);
 
   return (
     <div className="space-y-4">
@@ -270,7 +268,7 @@ function Picking({ card }: { card: DecisionCardView }) {
       {isWinner ? (
         <div className="space-y-3">
           <Notice tone="success" icon={<Crown className="size-5 animate-crown" aria-hidden />} title="결정권 획득! 장소를 골라주세요">
-            결정 대상 후보 중에서 골라요. 조건 충돌 후보는 충돌 내용을 확인하고 골라주세요.
+            결정 대상 후보 중에서 골라요. 조건 충돌·확인 필요 후보는 표시된 이유를 확인하고 골라주세요.
           </Notice>
           <fieldset className="space-y-2">
             <legend className="sr-only">후보 선택</legend>
@@ -282,9 +280,9 @@ function Picking({ card }: { card: DecisionCardView }) {
                 <input type="radio" name={`pick-${card.id}`} className="mt-1 size-5 accent-[#e9553d]" checked={choice === c.id} onChange={() => setChoice(c.id)} />
                 <span className="min-w-0 flex-1">
                   <span className="block font-bold break-words">{c.name}</span>
-                  <span className="block text-sm text-ink-soft">{formatCost(c.cost)}</span>
+                  <span className="block text-sm text-ink-soft">{formatCost(c.cost, c.notes.cost)}</span>
                   <TasteTags tags={c.tags} className="mt-1.5" />
-                  <ConflictHint evaluation={card.evaluations.find((e) => e.candidateId === c.id)} />
+                  <IssueHint evaluation={card.evaluations.find((e) => e.candidateId === c.id)} />
                 </span>
               </label>
             ))}

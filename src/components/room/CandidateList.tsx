@@ -57,7 +57,7 @@ export function CandidateCard({
       <div className="mt-2 flex items-start gap-2">
         <div className="min-w-0 flex-1">
           <h4 className="text-lg font-bold leading-snug break-words">{candidate.name}</h4>
-          <p className={cn("text-sm font-semibold", candidate.cost === null ? "text-warning-ink" : "text-ink-soft")}>{formatCost(candidate.cost)}</p>
+          <p className={cn("text-sm font-semibold", candidate.cost === null ? "text-warning-ink" : "text-ink-soft")}>{formatCost(candidate.cost, candidate.notes.cost)}</p>
         </div>
         {canEdit && (
           <div className="flex shrink-0">
@@ -73,6 +73,13 @@ export function CandidateCard({
 
       <TasteTags tags={candidate.tags} className="mt-2" />
       {candidate.description && <p className="mt-2 text-sm text-ink break-words">{candidate.description}</p>}
+      {(candidate.notes.setting || candidate.notes.vibe) && (
+        <p className="mt-1 text-xs text-ink-soft break-words">
+          {candidate.notes.setting && <>실내·야외: {candidate.notes.setting}</>}
+          {candidate.notes.setting && candidate.notes.vibe && " · "}
+          {candidate.notes.vibe && <>분위기: {candidate.notes.vibe}</>}
+        </p>
+      )}
 
       {evaluation && (
         <div className="mt-3 rounded-xl bg-cream px-3 py-2.5">
@@ -150,7 +157,8 @@ export function CandidateList({
   const needs = card.evaluations.filter((e) => e.state === "needs_check").length;
   const conflict = card.evaluations.filter((e) => e.state === "conflict").length;
 
-  const openForm = (editing: Candidate | null) => setForm({ editing, key: Date.now() });
+  // key를 바꿔 폼을 매번 새로 연다
+  const openForm = (editing: Candidate | null) => setForm((prev) => ({ editing, key: (prev?.key ?? 0) + 1 }));
 
   const remove = async (c: Candidate) => {
     if (!window.confirm(`‘${c.name}’ 후보를 삭제할까요?`)) return;
@@ -186,32 +194,21 @@ export function CandidateList({
             <Pill tone="danger">조건 충돌 {conflict}</Pill>
           </div>
 
-          {pass + conflict === 0 && (
-            <Notice tone="danger" icon={<TriangleAlert className="size-5" aria-hidden />} title="결정할 수 있는 후보가 없어요.">
-              <p>모든 후보가 확인 필요 상태예요. 정보를 채워야 결정을 진행할 수 있어요.</p>
+          {conflict + needs > 0 && (
+            <Notice
+              tone="warning"
+              icon={<CircleHelp className="size-5" aria-hidden />}
+              title={`조건 충돌 ${conflict}개 · 확인 필요 ${needs}개 후보가 있어요.`}
+            >
+              <p>자동으로 빠지지 않아요. 방장이 결정을 시작할 때 후보별 이유를 보고 이번 결정에서 뺄지 골라요.</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button size="sm" variant="secondary" onClick={showConflicts}>
-                  충돌 이유 확인
+                  이유 확인
                 </Button>
                 <Button size="sm" variant="secondary" icon={<SlidersHorizontal className="size-3.5" aria-hidden />} onClick={onEditConditions}>
                   내 조건 수정
                 </Button>
-                {editable && (
-                  <Button size="sm" icon={<Plus className="size-3.5" aria-hidden />} onClick={() => openForm(null)}>
-                    후보 추가하기
-                  </Button>
-                )}
               </div>
-            </Notice>
-          )}
-          {conflict > 0 && (
-            <Notice tone="danger" icon={<TriangleAlert className="size-5" aria-hidden />} title="조건과 충돌하는 후보가 있어요.">
-              누군가의 예산이나 제외 조건과 맞지 않지만, 안내만 하고 결정 대상에는 포함돼요. 충돌 이유를 확인해주세요.
-            </Notice>
-          )}
-          {pass + conflict > 0 && needs > 0 && (
-            <Notice tone="warning" icon={<CircleHelp className="size-5" aria-hidden />} title="정보가 부족한 후보가 있어요.">
-              비용이나 특징을 채우거나, 아직 조건을 입력하지 않은 친구가 입력하면 판정할 수 있어요. 확인 필요 후보는 최종 선택 대상에서 빠져요.
             </Notice>
           )}
 

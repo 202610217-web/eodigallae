@@ -53,7 +53,7 @@ export function ConfirmedPlan({ onOpenCard }: { onOpenCard: (cardId: string) => 
                         {card.title} · {modeLabel(r.mode)}
                       </span>
                       <span className="block truncate font-bold">{r.candidate.name}</span>
-                      <span className="block text-sm text-ink-soft">{formatCost(r.candidate.cost)}</span>
+                      <span className="block text-sm text-ink-soft">{formatCost(r.candidate.cost, r.candidate.costNote)}</span>
                       <TasteTags tags={r.candidate.tags} className="mt-1.5" />
                     </span>
                   </button>

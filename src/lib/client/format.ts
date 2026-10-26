@@ -2,8 +2,9 @@ import { formatWon } from "@/lib/domain/evaluate";
 
 export { formatWon };
 
-export function formatCost(cost: number | null): string {
-  if (cost === null) return "비용 미확인";
+/** note: 비용을 '기타'로 고르고 적은 내용 */
+export function formatCost(cost: number | null, note?: string): string {
+  if (cost === null) return note ? `비용: ${note}` : "비용 미확인";
   if (cost === 0) return "무료";
   return `1인 ${formatWon(cost)}`;
 }

@@ -194,7 +194,7 @@ const addCand = async (client, cardId, c) => assert.equal((await client.act(room
 await addCand(alice, lunch, cand("통과 A", { cost: 12000, tags: ["food", "rest"] }));
 await addCand(bob, lunch, cand("예산 초과 B", { cost: 18000 }));
 await addCand(bob, lunch, cand("해산물 C", { cost: 10000, features: ["해산물"] }));
-await addCand(host, lunch, cand("비용 모름 D", { cost: null }));
+await addCand(host, lunch, cand("비용 모름 D", { cost: null, notes: { cost: "메뉴마다 달라요" } }));
 await addCand(host, lunch, cand("통과 E", { cost: 9000, tags: ["shopping"] }));
 
 s = (await host.state(roomId)).data;
@@ -209,6 +209,9 @@ await check("필수 조건 판정: 통과 / 예산 충돌 / 음식 충돌 / 확�
   assert.equal(evalOf(lunchCard, "해산물 C").state, "conflict");
   assert.ok(evalOf(lunchCard, "해산물 C").reasons.some((r) => r.text === "제외 음식 조건과 충돌"));
   assert.equal(evalOf(lunchCard, "비용 모름 D").state, "needs_check");
+  // 비용 '기타' 내용이 저장되고 확인 필요 이유에 나타남
+  assert.equal(byName(lunchCard, "비용 모름 D").notes.cost, "메뉴마다 달라요");
+  assert.ok(evalOf(lunchCard, "비용 모름 D").needsCheck.some((t) => t.includes("메뉴마다 달라요")));
 });
 
 await check("취향 점수와 추천 이유", () => {
@@ -228,11 +231,24 @@ await check("다른 사람의 후보는 수정 불가 (방장은 가능)", async
 });
 
 // ── 다수결 ──
-await check("방장만 결정 시작 가능", async () => {
+const A = byName(lunchCard, "통과 A").id;
+const E = byName(lunchCard, "통과 E").id;
+const B = byName(lunchCard, "예산 초과 B").id;
+const C = byName(lunchCard, "해산물 C").id;
+const D = byName(lunchCard, "비용 모름 D").id;
+
+await check("방장만 결정 시작, 모든 후보를 빼면 시작 불가", async () => {
   assert.equal((await alice.act(roomId, { type: "startDecision", cardId: lunch, mode: "vote" })).status, 403);
-  assert.equal((await host.act(roomId, { type: "startDecision", cardId: lunch, mode: "vote" })).status, 200);
+  const none = await host.act(roomId, { type: "startDecision", cardId: lunch, mode: "vote", excludeIds: [A, B, C, D, E] });
+  assert.equal(none.status, 409);
+  assert.equal(none.data.code, "NO_ELIGIBLE");
+});
+
+await check("조건 충돌·확인 필요 후보도 자동으로 빠지지 않고, 방장이 고른 후보만 제외", async () => {
+  // 방장은 확인 필요 D만 빼고, 조건 충돌 B·C는 포함하기로 선택
+  assert.equal((await host.act(roomId, { type: "startDecision", cardId: lunch, mode: "vote", excludeIds: [D] })).status, 200);
   s = (await host.state(roomId)).data;
-  assert.equal(s.cards[0].pool.length, 4); // 통과 A·E + 충돌 B·C (확인 필요 D 제외)
+  assert.deepEqual([...s.cards[0].pool].sort(), [A, B, C, E].sort());
 });
 
 await check("결정 중에는 후보·조건 수정 잠금", async () => {
@@ -240,13 +256,8 @@ await check("결정 중에는 후보·조건 수정 잠금", async () => {
   assert.equal((await bob.act(roomId, { type: "addCandidate", cardId: lunch, candidate: cand("늦은 후보") })).status, 409);
 });
 
-const A = byName(lunchCard, "통과 A").id;
-const E = byName(lunchCard, "통과 E").id;
-const D = byName(lunchCard, "비용 모름 D").id;
-
-await check("확인 필요 후보에는 투표 불가 (충돌 후보는 결정 대상)", async () => {
+await check("방장이 결정에서 뺀 후보에는 투표 불가", async () => {
   assert.equal((await bob.act(roomId, { type: "castVote", cardId: lunch, candidateId: D })).status, 400);
-  assert.ok(s.cards[0].pool.includes(byName(lunchCard, "예산 초과 B").id));
 });
 
 await check("투표 중에는 득표수·남의 선택이 숨겨짐, 참여 인원만 공개", async () => {

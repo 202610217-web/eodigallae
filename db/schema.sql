@@ -157,3 +157,5 @@ CREATE TABLE IF NOT EXISTS member_tokens (
   created_at      double precision NOT NULL
 );
 CREATE INDEX IF NOT EXISTS member_tokens_member_idx ON member_tokens(member_id);
+-- 후보의 '기타' 입력 내용 (비용·특징·실내/야외·분위기). 예: {"cost": "메뉴마다 달라요"}
+ALTER TABLE candidates ADD COLUMN IF NOT EXISTS notes jsonb NOT NULL DEFAULT '{}'::jsonb;

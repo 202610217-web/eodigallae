@@ -21,15 +21,7 @@ function stepIndex(card: DecisionCardView): number {
 }
 
 /** 세 가지 결정 방식이 공유하는 바깥 레이아웃. 안쪽 진행 화면만 방식별 패널로 바뀐다. */
-export function DecisionFlow({
-  card,
-  onAddCandidate,
-  onEditConditions,
-}: {
-  card: DecisionCardView;
-  onAddCandidate: () => void;
-  onEditConditions: () => void;
-}) {
+export function DecisionFlow({ card, onAddCandidate }: { card: DecisionCardView; onAddCandidate: () => void }) {
   const { view, act } = useRoom();
   const [resetting, setResetting] = useState(false);
   const step = stepIndex(card);
@@ -66,12 +58,12 @@ export function DecisionFlow({
           </span>
           <div className="min-w-0">
             <p className="font-bold">{info.title}</p>
-            <p className="truncate text-xs text-ink-soft">결정 대상 후보 {card.pool.length}개 · 조건 충돌 포함, 확인 필요 제외</p>
+            <p className="truncate text-xs text-ink-soft">결정 대상 후보 {card.pool.length}개 · 방장이 결정 전에 고른 후보</p>
           </div>
         </div>
       )}
 
-      {card.stage === "open" && <DecisionModePicker card={card} onAddCandidate={onAddCandidate} onEditConditions={onEditConditions} />}
+      {card.stage === "open" && <DecisionModePicker card={card} onAddCandidate={onAddCandidate} />}
 
       {card.stage === "deciding" && (
         <>

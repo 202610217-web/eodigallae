@@ -86,8 +86,17 @@ export const candidateFields = z.object({
     .max(4, "태그는 4개까지 고를 수 있어요.")
     .refine((t) => new Set(t).size === t.length, "같은 태그를 두 번 고를 수 없어요."),
   features: z.array(z.string().max(30)).max(20).nullable(),
-  setting: z.enum(["indoor", "outdoor", "both", "unknown"]),
-  vibe: z.enum(["quiet", "lively", "unknown"]),
+  setting: z.enum(["indoor", "outdoor", "both", "other", "unknown"]),
+  vibe: z.enum(["quiet", "lively", "other", "unknown"]),
+  // '기타'를 골랐을 때 적은 내용
+  notes: z
+    .object({
+      cost: trimmed(40, "비용 기타 내용").optional(),
+      features: trimmed(40, "기타 내용").optional(),
+      setting: trimmed(40, "실내/야외 기타 내용").optional(),
+      vibe: trimmed(40, "분위기 기타 내용").optional(),
+    })
+    .default({}),
   link,
   description: trimmed(LIMITS.description, "설명"),
 });
@@ -105,7 +114,13 @@ export const actionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("addCandidate"), cardId: id, candidate: candidateFields }),
   z.object({ type: z.literal("updateCandidate"), candidateId: id, candidate: candidateFields }),
   z.object({ type: z.literal("deleteCandidate"), candidateId: id }),
-  z.object({ type: z.literal("startDecision"), cardId: id, mode: z.enum(["vote", "roulette", "battle"]) }),
+  z.object({
+    type: z.literal("startDecision"),
+    cardId: id,
+    mode: z.enum(["vote", "roulette", "battle"]),
+    // 방장이 결정 전에 빼기로 고른 후보 (조건 충돌·확인 필요 후보 검토 단계)
+    excludeIds: z.array(id).max(100).default([]),
+  }),
   z.object({ type: z.literal("castVote"), cardId: id, candidateId: id }),
   z.object({ type: z.literal("closeVote"), cardId: id }),
   z.object({ type: z.literal("startTieRoulette"), cardId: id }),
