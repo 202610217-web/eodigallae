@@ -127,6 +127,17 @@ await check("잘못된 입력은 400 (종료일이 시작일보다 빠름)", asy
   assert.equal(r.status, 400);
 });
 
+await check("결정 카드는 아이콘으로 만들고, 카드 종류는 아이콘에서 정해짐", async () => {
+  const base = { name: "아이콘 모임", tripStart: "2026-11-07", tripEnd: null, host: profile("아이콘") };
+  assert.equal((await host.req("/api/rooms", { ...base, cards: [{ title: "카페", icon: "없는아이콘" }] })).status, 400);
+  assert.equal((await host.req("/api/rooms", { ...base, cards: [{ title: "카페" }] })).status, 400); // 아이콘도 종류도 없음
+  const r = await host.req("/api/rooms", { ...base, cards: [{ title: "카페 투어", icon: "coffee" }, { title: "캠핑장", icon: "tent", day: 1, time: "16:00" }] });
+  assert.equal(r.status, 200);
+  const cards = (await host.state(r.data.roomId)).data.cards;
+  assert.deepEqual(cards.map((c) => [c.icon, c.category]), [["coffee", "meal"], ["tent", "stay"]]);
+  assert.equal(cards[1].time, "16:00");
+});
+
 await check("유효하지 않은 초대 코드는 404", async () => {
   const r = await stranger.req("/api/invite/ZZZZZZ");
   assert.equal(r.status, 404);

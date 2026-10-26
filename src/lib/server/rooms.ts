@@ -53,6 +53,7 @@ interface CardRow {
   id: string;
   title: string;
   category: CardCategory;
+  icon: string | null;
   sortOrder: number;
   day: number | null;
   time: string | null;
@@ -126,6 +127,7 @@ function mapCard(r: Row): CardRow {
     id: str(r.id),
     title: str(r.title),
     category: r.category as CardCategory,
+    icon: (r.icon as string | null) ?? null,
     sortOrder: num(r.sort_order),
     day: optNum(r.day),
     time: (r.start_time as string | null) ?? null,
@@ -283,6 +285,7 @@ function buildView(data: RoomData, now: number, storage: Db["kind"]): RoomView {
       id: card.id,
       title: card.title,
       category: card.category,
+      icon: card.icon,
       sortOrder: card.sortOrder,
       day: card.day,
       time: card.time,
@@ -379,7 +382,7 @@ export async function createRoom(input: {
   name: string;
   tripStart: string;
   tripEnd: string | null;
-  cards: { title: string; category: CardCategory; day?: number | null; time?: string | null }[];
+  cards: { title: string; category: CardCategory; icon?: string | null; day?: number | null; time?: string | null }[];
   host: Profile;
   isDemo?: boolean;
   /** 로그인한 상태면 방장 참가자를 계정에 연결 */
@@ -406,10 +409,10 @@ export async function createRoom(input: {
           params: [memberId, roomId, input.host.nickname, input.host.character, input.host.color, hashToken(token), now, input.userId ?? null],
         },
         ...input.cards.map((c, i) => ({
-          text: `INSERT INTO decision_cards (id, room_id, title, category, sort_order, day, start_time, updated_at)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          text: `INSERT INTO decision_cards (id, room_id, title, category, icon, sort_order, day, start_time, updated_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
           // 일정을 보내지 않으면(데모 등) 1일차 + 제목으로 추측한 시간
-          params: [newId("card"), roomId, c.title, c.category, i, c.day ?? 1, c.time === undefined ? guessCardTime(c.title) : c.time, now],
+          params: [newId("card"), roomId, c.title, c.category, c.icon ?? null, i, c.day ?? 1, c.time === undefined ? guessCardTime(c.title) : c.time, now],
         })),
       ]);
       return { roomId, token, memberId, inviteCode };
@@ -513,7 +516,7 @@ export async function createDemoRoom(host: Profile, userId: string | null = null
     name: "부산 1박 2일 (데모)",
     tripStart: new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10),
     tripEnd: new Date(Date.now() + 8 * 864e5).toISOString().slice(0, 10),
-    cards: CARD_PRESETS.map((p) => ({ title: p.title, category: p.category })),
+    cards: CARD_PRESETS.map((p) => ({ title: p.title, category: p.category, icon: p.icon })),
     host,
     isDemo: true,
   });

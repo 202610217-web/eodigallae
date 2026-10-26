@@ -4,7 +4,6 @@ import { ChevronRight, FlaskConical, KeyRound, Plus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { AccountPanel } from "@/components/AccountPanel";
 import { Button } from "@/components/ui/Button";
 import { FieldError, TextInput } from "@/components/ui/Field";
 
@@ -64,7 +63,6 @@ export function HomeActions() {
         <FieldError>{error}</FieldError>
       </form>
 
-      <AccountPanel />
 
       <Link href="/demo" className="flex min-h-12 items-center justify-center gap-2 text-sm font-semibold text-ink-soft hover:text-ink">
         <FlaskConical className="size-4" aria-hidden /> 가상 친구들이 있는 데모 모임으로 둘러보기

@@ -156,6 +156,8 @@ export interface DecisionCardView {
   id: string;
   title: string;
   category: CardCategory;
+  /** 방장이 고른 아이콘 키 (CARD_ICONS). 이전 카드는 null → 제목으로 추측 */
+  icon: string | null;
   sortOrder: number;
   /** 몇 일차 (1부터), 정하지 않았으면 null */
   day: number | null;

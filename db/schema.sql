@@ -162,3 +162,5 @@ ALTER TABLE candidates ADD COLUMN IF NOT EXISTS notes jsonb NOT NULL DEFAULT '{}
 -- 결정 카드 일정: 몇 일차(1부터) · 시작 시각(HH:MM). 비어 있으면 일정표에서 맨 뒤로
 ALTER TABLE decision_cards ADD COLUMN IF NOT EXISTS day integer;
 ALTER TABLE decision_cards ADD COLUMN IF NOT EXISTS start_time text;
+-- 결정 카드 아이콘 (방장이 목록에서 고름). 비어 있으면 제목으로 추측한 아이콘
+ALTER TABLE decision_cards ADD COLUMN IF NOT EXISTS icon text;

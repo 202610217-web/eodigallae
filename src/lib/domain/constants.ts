@@ -66,12 +66,76 @@ export function guessCardTime(title: string): string | null {
   return rules.find(([re]) => re.test(title))?.[1] ?? null;
 }
 
-export const CARD_PRESETS: { key: string; title: string; category: CardCategory }[] = [
-  { key: "lunch", title: "점심 식사", category: "meal" },
-  { key: "activity", title: "오후 활동", category: "activity" },
-  { key: "dinner", title: "저녁 식사", category: "meal" },
-  { key: "stay", title: "숙소", category: "stay" },
+// 데모 모임 전용 기본 카드 (일반 모임은 방장이 카드를 직접 만든다)
+export const CARD_PRESETS: { key: string; title: string; category: CardCategory; icon: CardIconKey }[] = [
+  { key: "lunch", title: "점심 식사", category: "meal", icon: "soup" },
+  { key: "activity", title: "오후 활동", category: "activity", icon: "sun" },
+  { key: "dinner", title: "저녁 식사", category: "meal", icon: "cooking-pot" },
+  { key: "stay", title: "숙소", category: "stay", icon: "hotel" },
 ];
+
+/**
+ * 결정 카드 아이콘 목록. 방장이 고른 아이콘의 종류가 곧 카드 종류(식사·활동·숙소)가 된다.
+ * 종류는 조건 입력 항목(못 먹는 음식/참여 불가/숙소 제외)과 일정표(숙소는 따로)에 쓰인다.
+ */
+export const CARD_ICONS = {
+  utensils: { category: "meal", label: "식사" },
+  soup: { category: "meal", label: "한식·국밥" },
+  "cooking-pot": { category: "meal", label: "저녁·요리" },
+  croissant: { category: "meal", label: "아침·브런치" },
+  coffee: { category: "meal", label: "카페" },
+  cake: { category: "meal", label: "디저트" },
+  beer: { category: "meal", label: "술" },
+  cookie: { category: "meal", label: "간식" },
+  ticket: { category: "activity", label: "체험·입장" },
+  sun: { category: "activity", label: "낮 활동" },
+  "moon-star": { category: "activity", label: "밤·야경" },
+  waves: { category: "activity", label: "바다·물놀이" },
+  mountain: { category: "activity", label: "산·등산" },
+  footprints: { category: "activity", label: "산책" },
+  "shopping-bag": { category: "activity", label: "쇼핑" },
+  camera: { category: "activity", label: "사진" },
+  landmark: { category: "activity", label: "관광·전시" },
+  bike: { category: "activity", label: "자전거" },
+  car: { category: "activity", label: "드라이브·이동" },
+  hotel: { category: "stay", label: "호텔·펜션" },
+  bed: { category: "stay", label: "숙소" },
+  tent: { category: "stay", label: "캠핑" },
+} as const satisfies Record<string, { category: CardCategory; label: string }>;
+export type CardIconKey = keyof typeof CARD_ICONS;
+export const CARD_ICON_KEYS = Object.keys(CARD_ICONS) as CardIconKey[];
+
+// 제목 단어로 아이콘 추측 (방장이 아이콘을 고르기 전 기본값, 아이콘이 없는 이전 카드 표시용)
+const TITLE_ICON_RULES: [RegExp, CardIconKey][] = [
+  [/술|맥주|포차|바$|펍|이자카야/, "beer"],
+  [/카페|커피/, "coffee"],
+  [/디저트|케이크|빵집/, "cake"],
+  [/간식/, "cookie"],
+  [/아침|조식|브런치/, "croissant"],
+  [/점심/, "soup"],
+  [/저녁|야식/, "cooking-pot"],
+  [/캠핑|글램핑/, "tent"],
+  [/숙소|호텔|펜션|숙박/, "hotel"],
+  [/바다|해변|수영|물놀이/, "waves"],
+  [/등산|산행|트레킹/, "mountain"],
+  [/쇼핑|시장/, "shopping-bag"],
+  [/사진|포토/, "camera"],
+  [/박물관|전시|관광|투어|명소/, "landmark"],
+  [/자전거|라이딩/, "bike"],
+  [/산책|걷기/, "footprints"],
+  [/드라이브|이동/, "car"],
+  [/야경|밤/, "moon-star"],
+  [/오후|낮|활동/, "sun"],
+  [/식사|맛집|밥/, "utensils"],
+];
+
+export function guessCardIcon(title: string): CardIconKey | null {
+  return TITLE_ICON_RULES.find(([re]) => re.test(title))?.[1] ?? null;
+}
+
+export function isCardIconKey(v: unknown): v is CardIconKey {
+  return typeof v === "string" && v in CARD_ICONS;
+}
 
 export const CATEGORY_LABEL: Record<CardCategory, string> = {
   meal: "식사",

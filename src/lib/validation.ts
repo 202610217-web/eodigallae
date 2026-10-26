@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CHARACTER_KEYS, COLOR_KEYS, LIMITS, TASTE_KEYS } from "./domain/constants";
+import { CARD_ICONS, CARD_ICON_KEYS, CHARACTER_KEYS, COLOR_KEYS, LIMITS, TASTE_KEYS, type CardIconKey } from "./domain/constants";
 
 // 서버 API가 받는 모든 입력의 스키마. 오류 메시지는 화면에 그대로 보여줄 수 있는 문장으로 쓴다.
 
@@ -37,11 +37,16 @@ export const createRoomSchema = z
     tripEnd: dateStr.nullable(),
     cards: z
       .array(
-        z.object({
-          title: trimmed(20, "결정 카드 이름").min(1, "결정 카드 이름을 입력해주세요."),
-          category: z.enum(["meal", "activity", "stay"]),
-          ...cardSchedule,
-        }),
+        z
+          .object({
+            title: trimmed(20, "결정 카드 이름").min(1, "결정 카드 이름을 입력해주세요."),
+            // 아이콘을 고르면 카드 종류는 아이콘에서 정해진다. 아이콘 없이 종류만 보내는 것도 허용(이전 방식)
+            icon: z.enum(CARD_ICON_KEYS as [CardIconKey, ...CardIconKey[]]).nullable().default(null),
+            category: z.enum(["meal", "activity", "stay"]).optional(),
+            ...cardSchedule,
+          })
+          .refine((c) => c.icon !== null || c.category !== undefined, { message: "결정 카드 아이콘을 골라주세요." })
+          .transform(({ category, ...c }) => ({ ...c, category: c.icon ? CARD_ICONS[c.icon].category : category! })),
       )
       .min(1, "결정 카드를 하나 이상 골라주세요.")
       .max(8, "결정 카드는 8개까지 만들 수 있어요."),

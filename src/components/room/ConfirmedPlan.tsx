@@ -130,7 +130,7 @@ function PlanItem({ card, onOpenCard, timeLabel }: { card: ConfirmedCard; onOpen
         className="flex w-full gap-3 rounded-xl border border-line p-3 text-left hover:border-ink-faint"
       >
         <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-success text-success-ink">
-          <CardIcon title={card.title} category={card.category} className="size-4" />
+          <CardIcon icon={card.icon} title={card.title} category={card.category} className="size-4" />
         </span>
         <span className="min-w-0 flex-1">
           <span className="block text-xs font-semibold text-ink-soft">
