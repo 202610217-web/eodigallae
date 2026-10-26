@@ -23,13 +23,13 @@ const VIBE_OPTIONS: { key: CandidateVibe; label: string }[] = [
   { key: "lively", label: "활기참" },
   { key: "other", label: "기타" },
 ];
+// 특징은 있음/해당 없음만 고르고, 목록에 없는 항목은 '있음' 아래의 '기타' 칩으로 적는다
 const FEATURE_OPTIONS: { key: FeatureMode; label: string }[] = [
   { key: "some", label: "있음" },
   { key: "none", label: "해당 없음" },
-  { key: "other", label: "기타" },
 ];
 
-type FeatureMode = "unset" | "none" | "some" | "other";
+type FeatureMode = "unset" | "none" | "some";
 
 interface Draft {
   name: string;
@@ -39,6 +39,7 @@ interface Draft {
   tags: TasteKey[];
   featureMode: FeatureMode;
   features: string[];
+  featureOther: boolean;
   featureNote: string;
   setting: CandidateSetting;
   settingNote: string;
@@ -56,8 +57,9 @@ function toDraft(c: Candidate | null): Draft {
     costOther: c ? c.cost === null && Boolean(notes.cost) : false,
     costNote: notes.cost ?? "",
     tags: c?.tags ?? [],
-    featureMode: !c || c.features === null ? (notes.features ? "other" : "unset") : c.features.length === 0 ? "none" : "some",
+    featureMode: notes.features || (c?.features?.length ?? 0) > 0 ? "some" : c?.features ? "none" : "unset",
     features: c?.features ?? [],
+    featureOther: Boolean(notes.features),
     featureNote: notes.features ?? "",
     setting: c?.setting ?? "unknown",
     settingNote: notes.setting ?? "",
@@ -112,7 +114,7 @@ export function CandidateForm({
       vibe: draft.vibe,
       notes: {
         cost: draft.costOther ? draft.costNote : undefined,
-        features: draft.featureMode === "other" ? draft.featureNote : undefined,
+        features: draft.featureMode === "some" && draft.featureOther ? draft.featureNote : undefined,
         setting: draft.setting === "other" ? draft.settingNote : undefined,
         vibe: draft.vibe === "other" ? draft.vibeNote : undefined,
       },
@@ -129,14 +131,14 @@ export function CandidateForm({
     }
     const missingOther =
       (draft.costOther && !draft.costNote.trim() && "예상 1인 비용") ||
-      (draft.featureMode === "other" && !draft.featureNote.trim() && restriction.candidateLabel) ||
+      (draft.featureMode === "some" && draft.featureOther && !draft.featureNote.trim() && restriction.candidateLabel) ||
       (draft.setting === "other" && !draft.settingNote.trim() && "실내 / 야외") ||
       (draft.vibe === "other" && !draft.vibeNote.trim() && "분위기");
     if (missingOther) {
       setError(`${missingOther}의 ‘기타’ 내용을 적어주세요.`);
       return;
     }
-    if (draft.featureMode === "some" && draft.features.length === 0) {
+    if (draft.featureMode === "some" && draft.features.length === 0 && !draft.featureOther) {
       setError(`${restriction.candidateLabel}을(를) 골라주세요. 없으면 ‘해당 없음’을 선택해주세요.`);
       return;
     }
@@ -240,22 +242,30 @@ export function CandidateForm({
             onChange={(v) => set("featureMode", v)}
           />
           {draft.featureMode === "some" && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {restriction.options.map((o) => (
-                <ToggleChip
-                  key={o}
-                  selected={draft.features.includes(o)}
-                  onClick={() => set("features", draft.features.includes(o) ? draft.features.filter((x) => x !== o) : [...draft.features, o])}
-                >
-                  {o}
+            <>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {restriction.options.map((o) => (
+                  <ToggleChip
+                    key={o}
+                    selected={draft.features.includes(o)}
+                    onClick={() => set("features", draft.features.includes(o) ? draft.features.filter((x) => x !== o) : [...draft.features, o])}
+                  >
+                    {o}
+                  </ToggleChip>
+                ))}
+                <ToggleChip selected={draft.featureOther} onClick={() => set("featureOther", !draft.featureOther)}>
+                  기타
                 </ToggleChip>
-              ))}
-            </div>
+              </div>
+              {draft.featureOther && (
+                <>
+                  <OtherInput id="cand-feature-note" value={draft.featureNote} onChange={(v) => set("featureNote", v)} placeholder="예: 고수, 오이" />
+                  <p className="mt-1 text-xs text-ink-soft">목록에 없는 항목은 자동 비교 대신 친구들에게 참고로 보여줘요.</p>
+                </>
+              )}
+            </>
           )}
-          {draft.featureMode === "other" && (
-            <OtherInput id="cand-feature-note" value={draft.featureNote} onChange={(v) => set("featureNote", v)} placeholder="예: 여러 가게가 모인 시장이라 가게마다 달라요" />
-          )}
-          {(draft.featureMode === "unset" || draft.featureMode === "other") && (
+          {draft.featureMode === "unset" && (
             <p className="mt-2 text-xs text-warning-ink">있음·해당 없음을 고르지 않으면 제외 조건이 있는 친구 기준으로 ‘확인 필요’가 돼요.</p>
           )}
         </div>

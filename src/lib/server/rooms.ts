@@ -588,7 +588,8 @@ function candidateParams(c: CandidateFields) {
   // 기타 내용은 실제로 '기타'(값 없음)를 고른 항목만 남긴다
   const notes: CandidateNotes = {
     ...(c.cost === null && c.notes.cost ? { cost: c.notes.cost } : {}),
-    ...(c.features === null && c.notes.features ? { features: c.notes.features } : {}),
+    // 특징 기타: '있음' 아래 목록에 없는 항목을 적은 것 (화면은 '있음'+기타를 고를 때만 보낸다)
+    ...(c.notes.features ? { features: c.notes.features } : {}),
     ...(c.setting === "other" && c.notes.setting ? { setting: c.notes.setting } : {}),
     ...(c.vibe === "other" && c.notes.vibe ? { vibe: c.notes.vibe } : {}),
   };

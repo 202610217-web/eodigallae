@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays, Check, Copy, MapPin, Share2, UserPlus } from "lucide-react";
+import { CalendarDays, Check, Copy, MapPin, Share2 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
@@ -20,8 +20,20 @@ export function Logo({ compact = false }: { compact?: boolean }) {
 }
 
 export function RoomHeader() {
-  const { view } = useRoom();
+  const { view, toast } = useRoom();
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const copyCode = async () => {
+    try {
+      await navigator.clipboard.writeText(view.inviteCode);
+      setCopied(true);
+      toast("초대 코드를 복사했어요.");
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch {
+      toast("복사하지 못했어요. 코드를 직접 알려주세요.", "error");
+    }
+  };
 
   return (
     <header className="sticky top-0 z-20 border-b border-line bg-cream/95 backdrop-blur">
@@ -40,9 +52,27 @@ export function RoomHeader() {
             </span>
           </p>
         </div>
-        <Button variant="secondary" size="md" icon={<UserPlus className="size-4" aria-hidden />} onClick={() => setInviteOpen(true)}>
-          <span className="hidden sm:inline">친구 </span>초대
-        </Button>
+        <div className="flex shrink-0 items-center gap-1">
+          {/* 초대 코드를 바로 보여주고, 누르면 복사 */}
+          <button
+            type="button"
+            onClick={copyCode}
+            aria-label={`초대 코드 ${view.inviteCode} 복사`}
+            className="flex min-h-11 items-center gap-2 rounded-xl border border-line bg-white px-3 transition-colors hover:bg-cream"
+          >
+            <span className="hidden text-xs font-semibold text-ink-soft sm:inline">초대 코드</span>
+            <span className="font-mono text-base font-extrabold tracking-[0.15em] text-ink">{view.inviteCode}</span>
+            {copied ? <Check className="size-4 text-success-ink" aria-hidden /> : <Copy className="size-4 text-ink-soft" aria-hidden />}
+          </button>
+          <button
+            type="button"
+            onClick={() => setInviteOpen(true)}
+            aria-label="초대 링크 공유"
+            className="flex size-11 items-center justify-center rounded-xl text-ink-soft hover:bg-cream-deep"
+          >
+            <Share2 className="size-4" aria-hidden />
+          </button>
+        </div>
       </div>
       <InviteSheet open={inviteOpen} onClose={() => setInviteOpen(false)} />
     </header>

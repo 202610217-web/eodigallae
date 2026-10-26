@@ -185,6 +185,13 @@ describe("후보 순위와 결정 대상", () => {
     expect(e.needsCheck.some((t) => t.includes("시장 안 여러 가게"))).toBe(true);
   });
 
+  it("특징 '있음'의 기타 항목은 충돌로 보지 않고 참고로만 보여줌", () => {
+    const conditions = [cond("a", { restrictions: ["해산물"] }), cond("b"), cond("c")];
+    const e = evaluateCandidate(cand("x", { features: [], notes: { features: "고수" } }), { category: "meal", members, conditions });
+    expect(e.state).toBe("pass");
+    expect(e.reasons.some((r) => r.tone === "info" && r.text.includes("고수"))).toBe(true);
+  });
+
   it("후보가 없으면 빈 배열", () => {
     expect(evaluateCandidates({ category: "meal", members, conditions: allConds, candidates: [] })).toEqual([]);
   });

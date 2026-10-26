@@ -20,11 +20,11 @@ export function MemberStatusList() {
 
   return (
     <section aria-labelledby="members-title" className="rounded-[var(--radius-card)] bg-white p-4">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <h2 id="members-title" className="text-lg font-bold">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+        <h2 id="members-title" className="shrink-0 whitespace-nowrap text-lg font-bold">
           참가자 <span className="text-ink-faint">{view.members.length}</span>
         </h2>
-        <div className="flex items-center gap-1">
+        <div className="flex shrink-0 items-center gap-1">
           <Pill tone={readyCount === view.members.length ? "success" : "neutral"} icon={<CircleCheck className="size-3.5" aria-hidden />}>
             {readyCount}/{view.members.length}명 준비 완료
           </Pill>

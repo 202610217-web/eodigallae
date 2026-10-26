@@ -117,6 +117,10 @@ export function evaluateCandidate(
   if (everyoneAnswered && restrictionConflicts === 0 && !featuresUnknown) {
     reasons.push({ tone: "good", text: anyRestriction ? RESTRICTION_CONFLICT_TEXT[category].clear : "제외 조건을 둔 참가자 없음" });
   }
+  // 목록에 없는 특징(기타)은 자동 비교할 수 없어 참고로만 보여준다
+  if (candidate.features !== null && notes.features) {
+    reasons.push({ tone: "info", text: `${restriction.candidateLabel} 기타: ${notes.features} (참고)` });
+  }
 
   const tasteMembers = members.filter((m) => m.taste !== null);
   let tasteScore = 0;
