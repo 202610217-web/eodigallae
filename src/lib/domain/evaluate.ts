@@ -167,9 +167,14 @@ export function evaluateCandidates(input: EvaluateInput): CandidateEvaluation[] 
   }));
 }
 
-/** 필수 조건을 모두 통과한 후보 id만 돌려준다. 결정 방식은 이 목록만 대상으로 한다. */
+/** 결정 대상 여부. 조건 충돌 후보는 안내만 하고 포함하며, 판정할 수 없는 확인 필요 후보만 뺀다. */
+export function isDecidable(state: CheckState): boolean {
+  return state !== "needs_check";
+}
+
+/** 결정 대상 후보 id (통과 + 조건 충돌). 결정 방식은 이 목록만 대상으로 한다. */
 export function eligibleCandidateIds(evaluations: CandidateEvaluation[]): string[] {
-  return evaluations.filter((e) => e.state === "pass").map((e) => e.candidateId);
+  return evaluations.filter((e) => isDecidable(e.state)).map((e) => e.candidateId);
 }
 
 export function cardDisplayStatus(

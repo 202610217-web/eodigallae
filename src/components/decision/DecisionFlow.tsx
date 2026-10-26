@@ -66,7 +66,7 @@ export function DecisionFlow({
           </span>
           <div className="min-w-0">
             <p className="font-bold">{info.title}</p>
-            <p className="truncate text-xs text-ink-soft">결정 대상 후보 {card.pool.length}개 · 필수 조건 통과 후보만</p>
+            <p className="truncate text-xs text-ink-soft">결정 대상 후보 {card.pool.length}개 · 조건 충돌 포함, 확인 필요 제외</p>
           </div>
         </div>
       )}

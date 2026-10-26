@@ -2,6 +2,7 @@
 
 import { CircleCheck, Dices, EyeOff, LoaderCircle } from "lucide-react";
 import { useState } from "react";
+import { ConflictHint } from "@/components/room/ConflictHint";
 import { useRoom } from "@/components/room/RoomProvider";
 import { Button } from "@/components/ui/Button";
 import { Notice } from "@/components/ui/States";
@@ -100,6 +101,7 @@ export function VotingPanel({ card }: { card: DecisionCardView }) {
                 <span className="block font-bold break-words">{c.name}</span>
                 <span className="block text-sm text-ink-soft">{formatCost(c.cost)}</span>
                 <TasteTags tags={c.tags} className="mt-1.5" />
+                <ConflictHint evaluation={card.evaluations.find((e) => e.candidateId === c.id)} />
               </span>
             </label>
           ))}

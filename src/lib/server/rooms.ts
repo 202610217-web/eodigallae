@@ -721,7 +721,7 @@ export async function performAction(roomId: string, token: string | null, action
       if (card.stage !== "open") throw new AppError(409, "이미 결정이 진행 중이거나 확정된 카드예요.");
       const eligible = eligibleCandidateIds(evaluateCard(data, card));
       if (eligible.length === 0) {
-        throw new AppError(409, "조건을 만족하는 후보가 없어요. 조건을 수정하거나 후보를 추가해주세요.", "NO_ELIGIBLE");
+        throw new AppError(409, "결정할 수 있는 후보가 없어요. 확인 필요 후보의 정보를 채우거나 후보를 추가해주세요.", "NO_ELIGIBLE");
       }
       const phase: CardPhase = action.mode === "vote" ? "voting" : action.mode === "roulette" ? "roulette_ready" : "battle_lobby";
       const rows = await db.query(
@@ -738,7 +738,7 @@ export async function performAction(roomId: string, token: string | null, action
       const card = requireCard(data, action.cardId);
       requirePhase(card, "voting", "투표가 진행 중이 아니에요.");
       if (!card.pool.includes(action.candidateId)) {
-        throw new AppError(400, "필수 조건을 통과한 후보에만 투표할 수 있어요.");
+        throw new AppError(400, "결정 대상 후보에만 투표할 수 있어요.");
       }
       const rows = await db.query(
         `INSERT INTO votes (card_id, member_id, round, room_id, candidate_id, created_at)
@@ -795,7 +795,7 @@ export async function performAction(roomId: string, token: string | null, action
           candidate: item,
           mode: card.mode ?? "roulette",
           reasons: [
-            fromTie ? `다수결 동점 후보 ${pool.length}개 중 룰렛 추첨` : `필수 조건을 통과한 후보 ${pool.length}개 중 같은 확률로 추첨`,
+            fromTie ? `다수결 동점 후보 ${pool.length}개 중 룰렛 추첨` : `결정 대상 후보 ${pool.length}개 중 같은 확률로 추첨`,
             ...goodReasons(evaluations, item.id),
           ],
           detail: { kind: "roulette", pool: pool.map((c) => ({ candidateId: c.id, name: c.name })), winnerIndex: index, fromTie },
@@ -858,7 +858,7 @@ export async function performAction(roomId: string, token: string | null, action
       const evaluations = evaluateCard(data, card);
       const eligible = eligibleCandidateIds(evaluations);
       if (!card.pool.includes(action.candidateId) || !eligible.includes(action.candidateId)) {
-        throw new AppError(400, "필수 조건과 충돌하는 후보는 고를 수 없어요.");
+        throw new AppError(400, "결정 대상 후보만 고를 수 있어요.");
       }
       const candidate = data.candidates.find((c) => c.id === action.candidateId)!;
       const entries = data.battle.filter((b) => b.cardId === card.id).sort((a, b) => b.taps - a.taps);

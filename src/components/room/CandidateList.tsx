@@ -186,9 +186,9 @@ export function CandidateList({
             <Pill tone="danger">조건 충돌 {conflict}</Pill>
           </div>
 
-          {pass === 0 && (
-            <Notice tone="danger" icon={<TriangleAlert className="size-5" aria-hidden />} title="조건을 만족하는 후보가 없어요.">
-              <p>필수 조건을 모두 통과한 후보가 있어야 결정을 진행할 수 있어요.</p>
+          {pass + conflict === 0 && (
+            <Notice tone="danger" icon={<TriangleAlert className="size-5" aria-hidden />} title="결정할 수 있는 후보가 없어요.">
+              <p>모든 후보가 확인 필요 상태예요. 정보를 채워야 결정을 진행할 수 있어요.</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button size="sm" variant="secondary" onClick={showConflicts}>
                   충돌 이유 확인
@@ -204,13 +204,18 @@ export function CandidateList({
               </div>
             </Notice>
           )}
-          {pass > 0 && needs > 0 && (
+          {conflict > 0 && (
+            <Notice tone="danger" icon={<TriangleAlert className="size-5" aria-hidden />} title="조건과 충돌하는 후보가 있어요.">
+              누군가의 예산이나 제외 조건과 맞지 않지만, 안내만 하고 결정 대상에는 포함돼요. 충돌 이유를 확인해주세요.
+            </Notice>
+          )}
+          {pass + conflict > 0 && needs > 0 && (
             <Notice tone="warning" icon={<CircleHelp className="size-5" aria-hidden />} title="정보가 부족한 후보가 있어요.">
               비용이나 특징을 채우거나, 아직 조건을 입력하지 않은 친구가 입력하면 판정할 수 있어요. 확인 필요 후보는 최종 선택 대상에서 빠져요.
             </Notice>
           )}
 
-          <p className="text-xs text-ink-soft">순서는 필수 조건 통과 여부와 취향 일치 점수로 정한 참고용이에요. 최종 결정은 함께 정해요.</p>
+          <p className="text-xs text-ink-soft">순서는 필수 조건 통과 여부와 취향 일치 점수로 정한 참고용이에요. 추천은 통과 후보 중에서만 골라요. 최종 결정은 함께 정해요.</p>
 
           <div className="space-y-3">
             {ordered.map((c, i) => (

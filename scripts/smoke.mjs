@@ -198,7 +198,7 @@ await check("방장만 결정 시작 가능", async () => {
   assert.equal((await alice.act(roomId, { type: "startDecision", cardId: lunch, mode: "vote" })).status, 403);
   assert.equal((await host.act(roomId, { type: "startDecision", cardId: lunch, mode: "vote" })).status, 200);
   s = (await host.state(roomId)).data;
-  assert.equal(s.cards[0].pool.length, 2); // 통과 A, 통과 E 만
+  assert.equal(s.cards[0].pool.length, 4); // 통과 A·E + 충돌 B·C (확인 필요 D 제외)
 });
 
 await check("결정 중에는 후보·조건 수정 잠금", async () => {
@@ -208,10 +208,11 @@ await check("결정 중에는 후보·조건 수정 잠금", async () => {
 
 const A = byName(lunchCard, "통과 A").id;
 const E = byName(lunchCard, "통과 E").id;
-const B = byName(lunchCard, "예산 초과 B").id;
+const D = byName(lunchCard, "비용 모름 D").id;
 
-await check("충돌 후보에는 투표 불가", async () => {
-  assert.equal((await bob.act(roomId, { type: "castVote", cardId: lunch, candidateId: B })).status, 400);
+await check("확인 필요 후보에는 투표 불가 (충돌 후보는 결정 대상)", async () => {
+  assert.equal((await bob.act(roomId, { type: "castVote", cardId: lunch, candidateId: D })).status, 400);
+  assert.ok(s.cards[0].pool.includes(byName(lunchCard, "예산 초과 B").id));
 });
 
 await check("투표 중에는 득표수·남의 선택이 숨겨짐, 참여 인원만 공개", async () => {
@@ -240,7 +241,7 @@ await check("전원 투표 시 자동 마감 → 최다 득표 결과 공개", a
   assert.equal(c.phase, "result");
   assert.equal(c.result.candidate.name, "통과 A");
   assert.equal(c.result.detail.kind, "vote");
-  assert.deepEqual(c.voting.counts.map((x) => x.votes), [2, 1]);
+  assert.deepEqual(c.voting.counts.map((x) => x.votes), [2, 1, 0, 0]);
 });
 
 await check("확정은 방장만, 한 번만", async () => {
@@ -334,9 +335,10 @@ await check("쟁탈전: 준비 → 카운트다운 중 입력 무시 → 연타 
   assert.equal(card.battleWinnerId, s.members.find((m) => m.nickname === "앨리스").id);
 });
 
-await check("우승자만 고를 수 있고, 충돌 후보는 우승자도 선택 불가", async () => {
+await check("우승자만 고를 수 있고, 결정 대상 밖 후보는 우승자도 선택 불가 (충돌 후보는 대상)", async () => {
   assert.equal((await bob.act(roomId, { type: "battlePick", cardId: activity, candidateId: sea })).status, 403);
-  assert.equal((await alice.act(roomId, { type: "battlePick", cardId: activity, candidateId: pub })).status, 400);
+  assert.equal((await alice.act(roomId, { type: "battlePick", cardId: activity, candidateId: X })).status, 400); // 다른 카드의 후보
+  assert.ok(s.cards[1].pool.includes(pub));
   assert.equal((await alice.act(roomId, { type: "battlePick", cardId: activity, candidateId: sea })).status, 200);
   assert.equal((await alice.act(roomId, { type: "battlePick", cardId: activity, candidateId: sea })).status, 409);
   s = (await bob.state(roomId)).data;
@@ -345,7 +347,7 @@ await check("우승자만 고를 수 있고, 충돌 후보는 우승자도 선�
 });
 
 // ── 예외 ──
-await check("통과 후보가 없으면 결정 시작 차단", async () => {
+await check("결정 대상 후보가 없으면 결정 시작 차단", async () => {
   const r = await host.act(roomId, { type: "startDecision", cardId: stay, mode: "roulette" });
   assert.equal(r.status, 409);
   assert.equal(r.data.code, "NO_ELIGIBLE");

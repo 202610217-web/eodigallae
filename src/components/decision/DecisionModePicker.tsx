@@ -7,12 +7,13 @@ import { Button } from "@/components/ui/Button";
 import { Notice } from "@/components/ui/States";
 import { cn } from "@/lib/client/cn";
 import type { DecisionMode } from "@/lib/domain/constants";
+import { isDecidable } from "@/lib/domain/evaluate";
 import type { DecisionCardView } from "@/lib/domain/types";
 
 export const MODE_INFO: Record<DecisionMode, { icon: LucideIcon; title: string; desc: string }> = {
   vote: { icon: Vote, title: "다수결", desc: "한 사람당 한 표. 마감 전에는 득표수를 숨기고, 동점이면 룰렛으로." },
-  roulette: { icon: Dices, title: "운명의 룰렛", desc: "통과한 후보를 모두 같은 확률로 넣고 돌려요." },
-  battle: { icon: Hand, title: "결정권 쟁탈전", desc: "10초 연타 대결! 1등이 통과한 후보 중 하나를 골라요." },
+  roulette: { icon: Dices, title: "운명의 룰렛", desc: "결정 대상 후보를 모두 같은 확률로 넣고 돌려요." },
+  battle: { icon: Hand, title: "결정권 쟁탈전", desc: "10초 연타 대결! 1등이 결정 대상 후보 중 하나를 골라요." },
 };
 
 export function DecisionModePicker({
@@ -27,17 +28,18 @@ export function DecisionModePicker({
   const { view, act } = useRoom();
   const [mode, setMode] = useState<DecisionMode>("vote");
   const [starting, setStarting] = useState(false);
-  const eligible = card.evaluations.filter((e) => e.state === "pass");
+  const eligible = card.evaluations.filter((e) => isDecidable(e.state));
   const names = eligible.map((e) => card.candidates.find((c) => c.id === e.candidateId)?.name).filter(Boolean);
+  const conflictCount = eligible.filter((e) => e.state === "conflict").length;
   const notReady = view.members.length - card.conditions.filter((c) => c.ready).length;
 
   if (eligible.length === 0) {
     return (
-      <Notice tone="danger" icon={<TriangleAlert className="size-5" aria-hidden />} title="조건을 만족하는 후보가 없어요.">
+      <Notice tone="danger" icon={<TriangleAlert className="size-5" aria-hidden />} title="결정할 수 있는 후보가 없어요.">
         <p>
           {card.candidates.length === 0
             ? "아직 등록된 후보가 없어요. 후보를 먼저 등록해주세요."
-            : "모든 후보가 필수 조건과 충돌하거나 확인이 필요해요. 결정을 시작하려면 조건을 수정하거나 후보를 추가해주세요."}
+            : "모든 후보가 확인 필요 상태예요. 비용·특징을 채우거나, 아직 조건을 입력하지 않은 친구가 입력하면 결정을 시작할 수 있어요."}
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
           <Button size="sm" variant="secondary" icon={<SlidersHorizontal className="size-3.5" aria-hidden />} onClick={onEditConditions}>
@@ -55,7 +57,7 @@ export function DecisionModePicker({
     return (
       <div className="rounded-[var(--radius-card)] bg-white p-5 text-center">
         <p className="font-bold">방장이 결정 방식을 고르면 여기서 함께 진행해요.</p>
-        <p className="mt-1 text-sm text-ink-soft">현재 필수 조건을 통과한 후보 {eligible.length}개가 결정 대상이에요.</p>
+        <p className="mt-1 text-sm text-ink-soft">현재 후보 {eligible.length}개가 결정 대상이에요.{conflictCount > 0 && ` (조건 충돌 ${conflictCount}개 포함)`}</p>
       </div>
     );
   }
@@ -100,8 +102,14 @@ export function DecisionModePicker({
       <div className="rounded-[var(--radius-card)] bg-white p-4">
         <p className="text-sm font-bold">결정 대상 후보 {eligible.length}개</p>
         <p className="mt-1 text-sm text-ink-soft">{names.join(" · ")}</p>
-        <p className="mt-2 text-xs text-ink-soft">필수 조건을 통과한 후보만 포함돼요. 결정 중에는 후보와 조건이 잠겨요.</p>
+        <p className="mt-2 text-xs text-ink-soft">확인 필요 후보만 빠져요. 결정 중에는 후보와 조건이 잠겨요.</p>
       </div>
+
+      {conflictCount > 0 && (
+        <Notice tone="danger" icon={<TriangleAlert className="size-5" aria-hidden />} title={`조건 충돌 후보 ${conflictCount}개도 결정에 포함돼요.`}>
+          누군가의 예산이나 제외 조건과 맞지 않는 후보예요. 결정 화면에 충돌 내용이 함께 표시돼요.
+        </Notice>
+      )}
 
       {notReady > 0 && (
         <Notice tone="warning" icon={<TriangleAlert className="size-5" aria-hidden />} title={`아직 ${notReady}명이 조건 준비를 마치지 않았어요.`}>

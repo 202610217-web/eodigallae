@@ -153,7 +153,7 @@ describe("필수 조건 검사", () => {
 });
 
 describe("후보 순위와 결정 대상", () => {
-  it("통과 > 확인 필요 > 충돌 순이고, 통과 후보만 결정 대상", () => {
+  it("통과 > 확인 필요 > 충돌 순이고, 확인 필요 후보만 결정 대상에서 빠짐", () => {
     const conditions = [cond("a", { maxBudget: 15000 }), cond("b"), cond("c")];
     const evals = evaluateCandidates({
       category: "meal",
@@ -167,7 +167,7 @@ describe("후보 순위와 결정 대상", () => {
       ],
     });
     expect(evals.map((e) => e.candidateId)).toEqual(["best", "low", "unknown", "over"]);
-    expect(eligibleCandidateIds(evals)).toEqual(["best", "low"]);
+    expect(eligibleCandidateIds(evals)).toEqual(["best", "low", "over"]);
     expect(evals.filter((e) => e.recommended).map((e) => e.candidateId)).toEqual(["best"]);
   });
 
@@ -175,7 +175,7 @@ describe("후보 순위와 결정 대상", () => {
     expect(evaluateCandidates({ category: "meal", members, conditions: allConds, candidates: [] })).toEqual([]);
   });
 
-  it("모든 후보가 충돌하면 추천도 결정 대상도 없다", () => {
+  it("모든 후보가 충돌하면 추천은 없지만 결정 대상에는 포함", () => {
     const conditions = members.map((m) => cond(m.id, { maxBudget: 1000 }));
     const evals = evaluateCandidates({
       category: "meal",
@@ -183,7 +183,7 @@ describe("후보 순위와 결정 대상", () => {
       conditions,
       candidates: [cand("x", { tags: ["food"] }), cand("y")],
     });
-    expect(eligibleCandidateIds(evals)).toEqual([]);
+    expect(eligibleCandidateIds(evals)).toEqual(["x", "y"]);
     expect(evals.some((e) => e.recommended)).toBe(false);
   });
 });

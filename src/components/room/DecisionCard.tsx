@@ -7,6 +7,7 @@ import { cn } from "@/lib/client/cn";
 import { formatCost } from "@/lib/client/format";
 import { cardReadyCount, myCondition } from "@/lib/client/selectors";
 import { modeLabel, type CardCategory } from "@/lib/domain/constants";
+import { isDecidable } from "@/lib/domain/evaluate";
 import type { DecisionCardView } from "@/lib/domain/types";
 import { useRoom } from "./RoomProvider";
 
@@ -47,7 +48,7 @@ export function DecisionCard({ card, index, onOpen }: { card: DecisionCardView; 
   const ready = cardReadyCount(card);
   const total = view.members.length;
   const mine = myCondition(card, view.me.id);
-  const passCount = card.evaluations.filter((e) => e.state === "pass").length;
+  const decidableCount = card.evaluations.filter((e) => isDecidable(e.state)).length;
   const confirmed = card.stage === "confirmed" && card.result;
 
   return (
@@ -94,7 +95,7 @@ export function DecisionCard({ card, index, onOpen }: { card: DecisionCardView; 
               <dt className="text-xs text-ink-soft">후보</dt>
               <dd className="font-bold">
                 {card.candidates.length}개
-                {card.candidates.length > 0 && <span className="font-medium text-ink-soft"> · 통과 {passCount}</span>}
+                {card.candidates.length > 0 && <span className="font-medium text-ink-soft"> · 결정 대상 {decidableCount}</span>}
               </dd>
             </div>
             <div className="rounded-xl bg-cream px-3 py-2">
@@ -115,8 +116,8 @@ export function DecisionCard({ card, index, onOpen }: { card: DecisionCardView; 
                   : "내 조건을 입력해주세요"
                 : card.candidates.length === 0
                   ? "첫 번째 후보를 등록해주세요."
-                  : passCount === 0
-                    ? "조건을 만족하는 후보가 없어요."
+                  : decidableCount === 0
+                    ? "결정할 수 있는 후보가 없어요."
                     : "후보를 비교하고 결정 방식을 골라요")}
           </p>
         </>

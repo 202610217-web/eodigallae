@@ -1,10 +1,12 @@
 "use client";
 
-import { Dices, Triangle } from "lucide-react";
+import { Dices, Triangle, TriangleAlert } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useRoom } from "@/components/room/RoomProvider";
 import { Button } from "@/components/ui/Button";
+import { cn } from "@/lib/client/cn";
 import { rouletteRotation } from "@/lib/domain/decide";
+import { eligibleCandidateIds } from "@/lib/domain/evaluate";
 import type { DecisionCardView } from "@/lib/domain/types";
 import { ResultReveal } from "./ResultReveal";
 
@@ -114,9 +116,11 @@ export function RoulettePanel({ card }: { card: DecisionCardView }) {
   }
 
   // 돌리기 전: 포함된 후보를 먼저 확인한다
-  const eligible = new Set(card.evaluations.filter((e) => e.state === "pass").map((e) => e.candidateId));
+  const eligible = new Set(eligibleCandidateIds(card.evaluations));
   const ids = (card.tieCandidateIds.length > 0 ? card.tieCandidateIds : card.pool).filter((id) => eligible.has(id));
   const names = ids.map((id) => card.candidates.find((c) => c.id === id)?.name ?? "후보");
+  const conflicted = new Set(card.evaluations.filter((e) => e.state === "conflict").map((e) => e.candidateId));
+  const conflictCount = ids.filter((id) => conflicted.has(id)).length;
 
   return (
     <div className="space-y-4">
@@ -128,11 +132,21 @@ export function RoulettePanel({ card }: { card: DecisionCardView }) {
           </p>
           <ul className="mt-2 flex flex-wrap gap-1.5">
             {names.map((name, i) => (
-              <li key={`${name}-${i}`} className="rounded-full bg-cream px-3 py-1 text-sm font-medium">
+              <li
+                key={`${name}-${i}`}
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm font-medium",
+                  conflicted.has(ids[i]) ? "bg-danger text-danger-ink" : "bg-cream",
+                )}
+              >
+                {conflicted.has(ids[i]) && <TriangleAlert className="size-3.5" aria-label="조건 충돌" />}
                 {name}
               </li>
             ))}
           </ul>
+          {conflictCount > 0 && (
+            <p className="mt-2 text-xs font-semibold text-danger-ink">조건 충돌 후보 {conflictCount}개도 함께 들어갔어요. 후보 탭에서 충돌 내용을 확인할 수 있어요.</p>
+          )}
           {card.tieCandidateIds.length > 0 && <p className="mt-2 text-xs text-ink-soft">다수결 동점 후보만 들어갔어요.</p>}
         </div>
       </div>
