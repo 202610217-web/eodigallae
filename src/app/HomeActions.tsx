@@ -4,6 +4,7 @@ import { ChevronRight, FlaskConical, KeyRound, Plus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useSyncExternalStore } from "react";
+import { AccountPanel } from "@/components/AccountPanel";
 import { Button } from "@/components/ui/Button";
 import { FieldError, TextInput } from "@/components/ui/Field";
 import { readRecentRooms, recentRoomsSnapshot } from "@/lib/client/recent";
@@ -68,6 +69,8 @@ export function HomeActions() {
         </div>
         <FieldError>{error}</FieldError>
       </form>
+
+      <AccountPanel />
 
       {recent.length > 0 && (
         <section className="rounded-[var(--radius-card)] bg-white p-5">

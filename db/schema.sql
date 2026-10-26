@@ -125,3 +125,35 @@ CREATE TABLE IF NOT EXISTS decision_results (
   PRIMARY KEY (card_id, round)
 );
 CREATE INDEX IF NOT EXISTS results_room_idx ON decision_results(room_id);
+
+-- ───── 회원 계정 (선택) ─────
+-- 가입하지 않아도 모임은 그대로 쓸 수 있다. 가입하면 참가자(members)를 계정에 연결해
+-- 다른 기기에서 로그인해도 같은 참가자로 이어서 쓸 수 있다.
+CREATE TABLE IF NOT EXISTS users (
+  id              text PRIMARY KEY,
+  username        text NOT NULL UNIQUE,          -- 소문자로 정규화해서 저장
+  password_hash   text NOT NULL,                 -- scrypt$N$r$p$salt$hash (원문 저장 안 함)
+  created_at      double precision NOT NULL
+);
+
+-- 로그인 세션. 쿠키에는 무작위 토큰, DB에는 해시만 저장
+CREATE TABLE IF NOT EXISTS user_sessions (
+  token_hash      text PRIMARY KEY,
+  user_id         text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at      double precision NOT NULL,
+  expires_at      double precision NOT NULL
+);
+CREATE INDEX IF NOT EXISTS user_sessions_user_idx ON user_sessions(user_id);
+
+ALTER TABLE members ADD COLUMN IF NOT EXISTS user_id text REFERENCES users(id) ON DELETE SET NULL;
+-- 한 계정은 한 모임에 참가자 한 명만 (NULL인 비회원 참가자는 제한 없음)
+CREATE UNIQUE INDEX IF NOT EXISTS members_room_user_idx ON members(room_id, user_id);
+
+-- 로그인으로 다른 기기에서 들어올 때 발급하는 추가 참여 토큰 (기존 기기의 토큰은 그대로 유효)
+CREATE TABLE IF NOT EXISTS member_tokens (
+  token_hash      text PRIMARY KEY,
+  member_id       text NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+  room_id         text NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+  created_at      double precision NOT NULL
+);
+CREATE INDEX IF NOT EXISTS member_tokens_member_idx ON member_tokens(member_id);

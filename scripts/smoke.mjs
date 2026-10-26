@@ -23,7 +23,10 @@ class Client {
     for (const c of res.headers.getSetCookie()) {
       const [pair] = c.split(";");
       const i = pair.indexOf("=");
-      this.cookies.set(pair.slice(0, i), pair.slice(i + 1));
+      const value = pair.slice(i + 1);
+      // 서버가 쿠키를 지우면(빈 값 / Max-Age=0) 브라우저처럼 삭제한다
+      if (!value || /max-age=0/i.test(c)) this.cookies.delete(pair.slice(0, i));
+      else this.cookies.set(pair.slice(0, i), value);
     }
     const data = await res.json().catch(() => null);
     return { status: res.status, data };
@@ -374,6 +377,52 @@ await check("새로고침(재조회) 후에도 확정 결과 유지", async () =
   await host.act(roomId, { type: "confirmResult", cardId: dinner });
   const again = (await bob.state(roomId)).data;
   assert.equal(again.cards[2].stage, "confirmed");
+});
+
+// ── 회원 계정 (선택) ──
+const uname = `smoke_${Date.now().toString(36)}`;
+const bobPhone = new Client("bob-phone");
+
+await check("가입 형식 검사, 가입하면 이 브라우저로 참여한 모임이 계정에 연결", async () => {
+  assert.equal((await bob.req("/api/auth/signup", { username: "a!", password: "password123" })).status, 400);
+  assert.equal((await bob.req("/api/auth/signup", { username: uname, password: "short" })).status, 400);
+  const r = await bob.req("/api/auth/signup", { username: uname.toUpperCase(), password: "password123" });
+  assert.equal(r.status, 200);
+  assert.equal(r.data.user.username, uname); // 소문자로 저장
+  const me = (await bob.req("/api/auth/me")).data;
+  assert.equal(me.user.username, uname);
+  assert.ok(me.rooms.some((x) => x.id === roomId && x.nickname === "밥"));
+  assert.equal((await stranger.req("/api/auth/signup", { username: uname, password: "password123" })).status, 409);
+});
+
+await check("다른 기기에서 로그인하면 같은 참가자로 모임에 들어감 (기존 기기도 계속 사용)", async () => {
+  assert.equal((await bobPhone.state(roomId)).status, 401);
+  assert.equal((await bobPhone.req("/api/auth/login", { username: uname, password: "wrong-password" })).status, 401);
+  assert.equal((await bobPhone.req("/api/auth/login", { username: "nobody_here", password: "password123" })).status, 401);
+  assert.equal((await bobPhone.req("/api/auth/login", { username: uname, password: "password123" })).status, 200);
+  const phoneView = await bobPhone.state(roomId);
+  assert.equal(phoneView.status, 200);
+  const bobView = await bob.state(roomId);
+  assert.equal(bobView.status, 200);
+  assert.equal(phoneView.data.me.id, bobView.data.me.id);
+  assert.ok(!JSON.stringify(phoneView.data).includes("user_"), "상태 응답에 계정 id가 노출되지 않음");
+});
+
+await check("로그인한 상태로 만든 모임은 내 모임 목록에 바로 보임", async () => {
+  const r = await bobPhone.req("/api/rooms", { name: "계정 모임", tripStart: "2026-12-01", tripEnd: null, cards: [{ title: "점심", category: "meal" }], host: profile("밥") });
+  assert.equal(r.status, 200);
+  const me = (await bobPhone.req("/api/auth/me")).data;
+  assert.ok(me.rooms.some((x) => x.id === r.data.roomId && x.isHost));
+});
+
+await check("로그아웃하면 그 기기의 계정 연결 참여 권한도 사라지고, 다른 기기는 영향 없음", async () => {
+  const phoneToken = bobPhone.cookies.get(`edg_${roomId}`);
+  assert.equal((await bobPhone.req("/api/auth/logout", {})).status, 200);
+  assert.equal((await bobPhone.req("/api/auth/me")).data.user, null);
+  assert.equal((await bobPhone.state(roomId)).status, 401);
+  bobPhone.cookies.set(`edg_${roomId}`, phoneToken); // 지워진 토큰을 다시 보내도 거절
+  assert.equal((await bobPhone.state(roomId)).status, 401);
+  assert.equal((await bob.state(roomId)).status, 200);
 });
 
 console.log(`\n${passed}개 검증 통과 (room ${roomId})`);

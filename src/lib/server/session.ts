@@ -47,3 +47,42 @@ export async function readMemberToken(roomId: string): Promise<string | null> {
   const jar = await cookies();
   return jar.get(COOKIE_PREFIX + roomId)?.value ?? null;
 }
+
+export async function clearMemberCookie(roomId: string) {
+  const jar = await cookies();
+  jar.delete(COOKIE_PREFIX + roomId);
+}
+
+/** 이 브라우저에 있는 모든 모임 참여 토큰 (모임 id는 "room_"으로 시작) */
+export async function readAllMemberTokens(): Promise<{ roomId: string; token: string }[]> {
+  const jar = await cookies();
+  return jar
+    .getAll()
+    .filter((c) => c.name.startsWith(COOKIE_PREFIX + "room_"))
+    .map((c) => ({ roomId: c.name.slice(COOKIE_PREFIX.length), token: c.value }));
+}
+
+// ───── 회원 로그인 세션 ─────
+const SESSION_COOKIE = "edg_session";
+export const SESSION_MAX_AGE = 60 * 60 * 24 * 30; // 30일
+
+export async function setSessionCookie(token: string) {
+  const jar = await cookies();
+  jar.set(SESSION_COOKIE, token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: SESSION_MAX_AGE,
+  });
+}
+
+export async function readSessionToken(): Promise<string | null> {
+  const jar = await cookies();
+  return jar.get(SESSION_COOKIE)?.value ?? null;
+}
+
+export async function clearSessionCookie() {
+  const jar = await cookies();
+  jar.delete(SESSION_COOKIE);
+}

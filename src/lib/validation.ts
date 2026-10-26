@@ -42,6 +42,19 @@ export const createRoomSchema = z
 
 export const joinSchema = profileSchema;
 
+// 회원 계정: 아이디는 소문자로 정규화해 저장한다
+export const authSchema = z.object({
+  username: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(/^[a-z0-9_]{4,20}$/, "아이디는 영문 소문자·숫자·밑줄(_)로 4~20자 입력해주세요."),
+  password: z
+    .string()
+    .min(8, "비밀번호는 8자 이상 입력해주세요.")
+    .max(100, "비밀번호는 100자 이내로 입력해주세요."),
+});
+
 const money = z
   .number({ message: "금액은 숫자로 입력해주세요." })
   .int("금액은 원 단위 정수로 입력해주세요.")

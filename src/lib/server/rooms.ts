@@ -179,6 +179,10 @@ function mapResult(r: Row): DecisionResult {
   };
 }
 
+// 참여 토큰으로 참가자를 찾는다. 처음 참여할 때 받은 토큰과, 로그인으로 다른 기기에서 받은 추가 토큰 모두 인정.
+const MEMBER_BY_TOKEN_SQL = `SELECT id FROM members WHERE room_id = $1 AND (
+  token_hash = $2 OR id IN (SELECT member_id FROM member_tokens WHERE room_id = $1 AND token_hash = $2))`;
+
 async function loadRoom(db: Db, roomId: string, token: string | null): Promise<RoomData> {
   const p = [roomId];
   const queries: Query[] = [
@@ -208,7 +212,7 @@ async function loadRoom(db: Db, roomId: string, token: string | null): Promise<R
       params: p,
     },
     {
-      text: "SELECT id FROM members WHERE room_id = $1 AND token_hash = $2",
+      text: MEMBER_BY_TOKEN_SQL,
       params: [roomId, token ? hashToken(token) : "-"],
     },
   ];
@@ -368,6 +372,8 @@ export async function createRoom(input: {
   cards: { title: string; category: CardCategory }[];
   host: Profile;
   isDemo?: boolean;
+  /** 로그인한 상태면 방장 참가자를 계정에 연결 */
+  userId?: string | null;
 }): Promise<{ roomId: string; token: string; memberId: string; inviteCode: string }> {
   const db = await getDb();
   const now = Date.now();
@@ -385,9 +391,9 @@ export async function createRoom(input: {
           params: [roomId, input.name, input.tripStart, input.tripEnd, inviteCode, input.isDemo ?? false, now],
         },
         {
-          text: `INSERT INTO members (id, room_id, nickname, character, color, is_host, token_hash, joined_at)
-                 VALUES ($1, $2, $3, $4, $5, true, $6, $7)`,
-          params: [memberId, roomId, input.host.nickname, input.host.character, input.host.color, hashToken(token), now],
+          text: `INSERT INTO members (id, room_id, nickname, character, color, is_host, token_hash, joined_at, user_id)
+                 VALUES ($1, $2, $3, $4, $5, true, $6, $7, $8)`,
+          params: [memberId, roomId, input.host.nickname, input.host.character, input.host.color, hashToken(token), now, input.userId ?? null],
         },
         ...input.cards.map((c, i) => ({
           text: `INSERT INTO decision_cards (id, room_id, title, category, sort_order, updated_at)
@@ -428,13 +434,17 @@ export async function getInvitePreview(code: string) {
 }
 
 export async function isMemberOf(roomId: string, token: string | null): Promise<boolean> {
-  if (!token) return false;
-  const db = await getDb();
-  const rows = await db.query("SELECT 1 FROM members WHERE room_id = $1 AND token_hash = $2", [roomId, hashToken(token)]);
-  return rows.length > 0;
+  return (await memberIdByToken(roomId, token)) !== null;
 }
 
-export async function joinRoom(code: string, profile: Profile) {
+export async function memberIdByToken(roomId: string, token: string | null): Promise<string | null> {
+  if (!token) return null;
+  const db = await getDb();
+  const rows = await db.query(MEMBER_BY_TOKEN_SQL, [roomId, hashToken(token)]);
+  return rows[0] ? str(rows[0].id) : null;
+}
+
+export async function joinRoom(code: string, profile: Profile, userId: string | null = null) {
   const db = await getDb();
   const rooms = await db.query("SELECT id FROM rooms WHERE invite_code = $1", [code]);
   if (rooms.length === 0) throw new AppError(404, "유효하지 않은 초대 코드예요. 코드를 다시 확인해주세요.", "INVALID_CODE");
@@ -448,9 +458,9 @@ export async function joinRoom(code: string, profile: Profile) {
   const token = newToken();
   try {
     await db.query(
-      `INSERT INTO members (id, room_id, nickname, character, color, is_host, token_hash, joined_at)
-       VALUES ($1, $2, $3, $4, $5, false, $6, $7)`,
-      [memberId, roomId, profile.nickname, profile.character, profile.color, hashToken(token), Date.now()],
+      `INSERT INTO members (id, room_id, nickname, character, color, is_host, token_hash, joined_at, user_id)
+       VALUES ($1, $2, $3, $4, $5, false, $6, $7, $8)`,
+      [memberId, roomId, profile.nickname, profile.character, profile.color, hashToken(token), Date.now(), userId],
     );
   } catch (err) {
     if (isUniqueViolation(err)) throw new AppError(409, "이미 같은 닉네임을 쓰는 참가자가 있어요. 다른 닉네임을 골라주세요.");
@@ -486,8 +496,9 @@ const DEMO_CANDIDATES: Record<string, DemoCandidate[]> = {
   ],
 };
 
-export async function createDemoRoom(host: Profile) {
+export async function createDemoRoom(host: Profile, userId: string | null = null) {
   const created = await createRoom({
+    userId,
     name: "부산 1박 2일 (데모)",
     tripStart: new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10),
     tripEnd: new Date(Date.now() + 8 * 864e5).toISOString().slice(0, 10),

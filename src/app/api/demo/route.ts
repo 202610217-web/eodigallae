@@ -1,3 +1,4 @@
+import { getCurrentUser } from "@/lib/server/auth";
 import { errorResponse } from "@/lib/server/errors";
 import { createDemoRoom } from "@/lib/server/rooms";
 import { setMemberCookie } from "@/lib/server/session";
@@ -7,7 +8,8 @@ import { profileSchema } from "@/lib/validation";
 export async function POST(request: Request) {
   try {
     const host = profileSchema.parse(await request.json());
-    const { roomId, token } = await createDemoRoom(host);
+    const user = await getCurrentUser();
+    const { roomId, token } = await createDemoRoom(host, user?.id ?? null);
     await setMemberCookie(roomId, token);
     return Response.json({ roomId });
   } catch (err) {
