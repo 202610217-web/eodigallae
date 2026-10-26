@@ -519,4 +519,42 @@ await check("내보내기: 결정 중에는 불가, 내보낸 참가자는 모�
   assert.ok(s.cards[0].candidates.some((c) => c.name === "예산 초과 B"), "내보낸 사람이 올린 후보는 남음");
 });
 
+// ── 구슬 레이스 ── (별도 모임: 방장=host, 참가자=carol)
+const mr = (await host.req("/api/rooms", { name: "구슬 모임", tripStart: "2026-11-07", tripEnd: null, cards: [{ title: "점심", icon: "soup" }], host: profile("방장") })).data;
+await carol.req(`/api/invite/${mr.inviteCode}/join`, profile("캐롤"));
+let ms = (await host.state(mr.roomId)).data;
+const mCard = ms.cards[0].id;
+for (const name of ["국밥집", "분식집", "돈가스"]) await host.act(mr.roomId, { type: "addCandidate", cardId: mCard, candidate: cand(name) });
+
+await check("구슬 레이스: 방장만 출발, 재생 중엔 결과를 숨기고 같은 기록을 받음", async () => {
+  assert.equal((await host.act(mr.roomId, { type: "startDecision", cardId: mCard, mode: "marble" })).status, 200);
+  assert.equal((await carol.act(mr.roomId, { type: "startMarble", cardId: mCard })).status, 403);
+  const both = await Promise.all([host.act(mr.roomId, { type: "startMarble", cardId: mCard }), host.act(mr.roomId, { type: "startMarble", cardId: mCard })]);
+  assert.ok(both.some((r) => r.status === 200));
+  ms = (await carol.state(mr.roomId)).data;
+  assert.equal(ms.cards[0].phase, "marble_running");
+  assert.equal(ms.cards[0].result, null, "재생 중에는 결과를 보내지 않음");
+  assert.ok(ms.cards[0].marble.endsAt > ms.cards[0].marble.startsAt);
+  const a = await host.req(`/api/rooms/${mr.roomId}/marble/${mCard}`);
+  const b = await carol.req(`/api/rooms/${mr.roomId}/marble/${mCard}`); // 도중에 들어온 사람도 같은 기록
+  assert.equal(a.status, 200);
+  assert.equal(JSON.stringify(a.data), JSON.stringify(b.data));
+  assert.equal(a.data.race.names.length, 3);
+  assert.equal((await stranger.req(`/api/rooms/${mr.roomId}/marble/${mCard}`)).status, 401);
+  assert.equal((await host.act(mr.roomId, { type: "confirmResult", cardId: mCard })).status, 409); // 재생 중 확정 불가
+});
+
+await check("구슬 레이스: 재생이 끝나면 결과 공개, 늦게 들어온 사람은 기록 없이 결과만", async () => {
+  const { endsAt } = ms.cards[0].marble;
+  await sleep(Math.max(0, endsAt - ms.serverNow) + 500);
+  const race = (await host.req(`/api/rooms/${mr.roomId}/marble/${mCard}`));
+  assert.equal(race.status, 404);
+  const done = (await carol.state(mr.roomId)).data.cards[0];
+  assert.equal(done.phase, "result");
+  assert.equal(done.result.detail.kind, "marble");
+  assert.equal(done.result.detail.order.length, 3);
+  assert.equal(done.result.candidate.id, done.result.detail.order[0].candidateId);
+  assert.equal((await host.act(mr.roomId, { type: "confirmResult", cardId: mCard })).status, 200);
+});
+
 console.log(`\n${passed}개 검증 통과 (room ${roomId})`);

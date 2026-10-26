@@ -182,6 +182,7 @@ export const DECISION_MODES = [
   { key: "vote", label: "다수결" },
   { key: "roulette", label: "운명의 룰렛" },
   { key: "battle", label: "결정권 쟁탈전" },
+  { key: "marble", label: "구슬 레이스" },
 ] as const;
 export type DecisionMode = (typeof DECISION_MODES)[number]["key"];
 

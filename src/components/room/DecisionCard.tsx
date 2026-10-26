@@ -101,6 +101,10 @@ export function phaseText(card: DecisionCardView): string | null {
       return "동점! 룰렛 대기 중";
     case "roulette_ready":
       return "룰렛 준비 중";
+    case "marble_ready":
+      return "구슬 출발 대기 중";
+    case "marble_running":
+      return "구슬 레이스 진행 중";
     case "battle_lobby":
       return "쟁탈전 참가자 모집 중";
     case "battle_running":

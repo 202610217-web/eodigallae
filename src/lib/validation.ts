@@ -133,7 +133,7 @@ export const actionSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("startDecision"),
     cardId: id,
-    mode: z.enum(["vote", "roulette", "battle"]),
+    mode: z.enum(["vote", "roulette", "battle", "marble"]),
     // 방장이 결정 전에 빼기로 고른 후보 (조건 충돌·확인 필요 후보 검토 단계)
     excludeIds: z.array(id).max(100).default([]),
   }),
@@ -141,6 +141,7 @@ export const actionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("closeVote"), cardId: id }),
   z.object({ type: z.literal("startTieRoulette"), cardId: id }),
   z.object({ type: z.literal("spinRoulette"), cardId: id }),
+  z.object({ type: z.literal("startMarble"), cardId: id }),
   z.object({ type: z.literal("battleReady"), cardId: id }),
   z.object({ type: z.literal("battleStart"), cardId: id }),
   z.object({ type: z.literal("battleTaps"), cardId: id, count: z.number().int().min(0).max(200) }),

@@ -8,6 +8,7 @@ import { cn } from "@/lib/client/cn";
 import type { DecisionCardView } from "@/lib/domain/types";
 import { ClickBattlePanel } from "./ClickBattlePanel";
 import { DecisionModePicker, MODE_INFO } from "./DecisionModePicker";
+import { MarblePanel } from "./MarblePanel";
 import { ResultReveal } from "./ResultReveal";
 import { RoulettePanel } from "./RoulettePanel";
 import { VotingPanel } from "./VotingPanel";
@@ -70,6 +71,7 @@ export function DecisionFlow({ card, onAddCandidate }: { card: DecisionCardView;
           {(card.phase === "roulette_ready" || (card.phase === "result" && isRouletteResult)) && <RoulettePanel key={card.round} card={card} />}
           {card.mode === "vote" && (card.phase === "voting" || card.phase === "tallying" || card.phase === "tie") && <VotingPanel card={card} />}
           {card.mode === "battle" && card.phase !== "result" && <ClickBattlePanel card={card} />}
+          {card.mode === "marble" && card.phase !== "result" && <MarblePanel card={card} />}
           {card.phase === "result" && !isRouletteResult && card.result && <ResultReveal card={card} result={card.result} />}
         </>
       )}

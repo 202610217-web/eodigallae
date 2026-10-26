@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, CircleHelp, Dices, Hand, ListChecks, Play, Plus, TriangleAlert, Vote, type LucideIcon } from "lucide-react";
+import { ArrowLeft, CircleDot, CircleHelp, Dices, Hand, ListChecks, Play, Plus, TriangleAlert, Vote, type LucideIcon } from "lucide-react";
 import { useState } from "react";
 import { useRoom } from "@/components/room/RoomProvider";
 import { Button } from "@/components/ui/Button";
@@ -16,6 +16,7 @@ export const MODE_INFO: Record<DecisionMode, { icon: LucideIcon; title: string; 
   vote: { icon: Vote, title: "다수결", desc: "한 사람당 한 표. 마감 전에는 득표수를 숨기고, 동점이면 룰렛으로." },
   roulette: { icon: Dices, title: "운명의 룰렛", desc: "결정 대상 후보를 모두 같은 확률로 넣고 돌려요." },
   battle: { icon: Hand, title: "결정권 쟁탈전", desc: `${BATTLE_TAP_MS / 1000}초 연타 대결! 1등이 결정 대상 후보 중 하나를 골라요.` },
+  marble: { icon: CircleDot, title: "구슬 레이스", desc: "후보 이름을 단 구슬이 장애물을 지나 떨어져요. 가장 먼저 도착한 구슬이 당첨!" },
 };
 
 /**
@@ -122,7 +123,7 @@ export function DecisionModePicker({
 
   return (
     <div className="space-y-4">
-      <div role="radiogroup" aria-label="결정 방식" className="grid gap-2 md:grid-cols-3">
+      <div role="radiogroup" aria-label="결정 방식" className="grid gap-2 md:grid-cols-2">
         {(Object.keys(MODE_INFO) as DecisionMode[]).map((key) => {
           const info = MODE_INFO[key];
           const Icon = info.icon;

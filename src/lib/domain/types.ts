@@ -74,6 +74,8 @@ export type CardPhase =
   | "tallying"
   | "tie"
   | "roulette_ready"
+  | "marble_ready"
+  | "marble_running"
   | "battle_lobby"
   | "battle_running"
   | "battle_picking"
@@ -108,7 +110,14 @@ export interface BattleDetail {
   ranking: { memberId: string; nickname: string; taps: number }[];
   winnerMemberId: string;
 }
-export type ResultDetail = VoteDetail | RouletteDetail | BattleDetail;
+export interface MarbleDetail {
+  kind: "marble";
+  /** 도착 순서 (첫 번째가 당첨) */
+  order: { candidateId: string; name: string }[];
+  startsAt: number;
+  endsAt: number;
+}
+export type ResultDetail = VoteDetail | RouletteDetail | BattleDetail | MarbleDetail;
 
 export interface DecisionResult {
   cardId: string;
@@ -171,6 +180,8 @@ export interface DecisionCardView {
   locked: boolean;
   pool: string[];
   tieCandidateIds: string[];
+  /** 구슬 레이스 재생 중일 때의 서버 시각 (결과는 끝날 때까지 숨긴다) */
+  marble: { startsAt: number; endsAt: number } | null;
   phaseStartedAt: number | null;
   battleWinnerId: string | null;
   conditions: MemberCondition[];

@@ -95,7 +95,10 @@ export function RoomProvider({
     }
   }, [roomId, toast]);
 
-  const fast = view?.cards.some((c) => c.phase === "battle_running" || c.phase === "battle_lobby" || c.phase === "tallying") ?? false;
+  const fast =
+    view?.cards.some((c) =>
+      ["battle_running", "battle_lobby", "tallying", "marble_ready", "marble_running"].includes(c.phase ?? ""),
+    ) ?? false;
 
   useEffect(() => {
     const first = window.setTimeout(() => void refresh(), 0);

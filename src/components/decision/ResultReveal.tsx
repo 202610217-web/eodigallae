@@ -101,6 +101,22 @@ function ResultDetailView({ result }: { result: DecisionResult }) {
       </p>
     );
   }
+  if (d.kind === "marble") {
+    return (
+      <div>
+        <p className="mb-1.5 text-sm font-bold">구슬 도착 순서</p>
+        <ol className="space-y-1 text-sm">
+          {d.order.map((o, i) => (
+            <li key={o.candidateId} className="flex items-center gap-2">
+              <span className="w-5 text-center font-bold text-ink-soft">{i + 1}</span>
+              <span className="flex-1 truncate">{o.name}</span>
+              {i === 0 && <Crown className="size-4 text-[#B7860B]" aria-label="1등" />}
+            </li>
+          ))}
+        </ol>
+      </div>
+    );
+  }
   return (
     <div>
       <p className="mb-1.5 text-sm font-bold">연타 순위</p>

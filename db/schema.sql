@@ -164,3 +164,13 @@ ALTER TABLE decision_cards ADD COLUMN IF NOT EXISTS day integer;
 ALTER TABLE decision_cards ADD COLUMN IF NOT EXISTS start_time text;
 -- 결정 카드 아이콘 (방장이 목록에서 고름). 비어 있으면 제목으로 추측한 아이콘
 ALTER TABLE decision_cards ADD COLUMN IF NOT EXISTS icon text;
+-- 구슬 레이스 움직임 기록. 서버가 한 번 계산해 저장하고, 모든 참가자가 같은 기록을 재생한다
+CREATE TABLE IF NOT EXISTS marble_races (
+  card_id         text NOT NULL REFERENCES decision_cards(id) ON DELETE CASCADE,
+  round           integer NOT NULL,
+  room_id         text NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+  data            jsonb NOT NULL,                -- MarbleRace (맵·이름·프레임·도착 순서)
+  starts_at       double precision NOT NULL,     -- 서버 시각 기준 출발 (카운트다운 뒤)
+  ends_at         double precision NOT NULL,     -- 재생이 끝나 결과를 공개하는 시각
+  PRIMARY KEY (card_id, round)
+);

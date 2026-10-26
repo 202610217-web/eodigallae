@@ -15,6 +15,7 @@ import {
   evaluateCandidates,
   memberTasteScore,
 } from "./evaluate";
+import { marblePositions, simulateMarbleRace } from "./marble";
 import type { Candidate, Member, MemberCondition } from "./types";
 
 const members: Pick<Member, "id" | "nickname" | "taste">[] = [
@@ -206,6 +207,26 @@ describe("후보 순위와 결정 대상", () => {
     });
     expect(decisionPool(evals)).toEqual(["x", "y"]);
     expect(evals.some((e) => e.recommended)).toBe(false);
+  });
+});
+
+describe("구슬 레이스", () => {
+  const entries = ["a", "b", "c", "d", "e"].map((id) => ({ id, name: `후보 ${id}` }));
+
+  it("같은 시드면 같은 레이스, 모든 구슬이 한 번씩 순위에 들어감", () => {
+    const a = simulateMarbleRace(entries, 1234);
+    const b = simulateMarbleRace(entries, 1234);
+    expect(JSON.stringify(a)).toBe(JSON.stringify(b));
+    expect([...a.order].sort()).toEqual([0, 1, 2, 3, 4]);
+    expect(a.durationMs).toBeGreaterThan(5_000);
+    expect(a.durationMs).toBeLessThan(90_000);
+  });
+
+  it("재생 위치는 프레임 사이를 보간하고 범위를 벗어나면 처음/끝에 고정", () => {
+    const race = simulateMarbleRace(entries, 99);
+    expect(marblePositions(race, -500)).toEqual(marblePositions(race, 0));
+    const end = marblePositions(race, race.durationMs + 10_000);
+    expect(end.every((p) => p.y >= race.finishY)).toBe(true);
   });
 });
 

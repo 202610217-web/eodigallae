@@ -15,6 +15,7 @@ import {
 } from "@/lib/domain/constants";
 import { battleWindow, acceptedTaps, pickUniform, rankBattle, tallyVotes } from "@/lib/domain/decide";
 import { cardDisplayStatus, decisionPool, evaluateCandidates } from "@/lib/domain/evaluate";
+import { MARBLE_COUNTDOWN_MS, MARBLE_FINISH_HOLD_MS, simulateMarbleRace, type MarbleRace } from "@/lib/domain/marble";
 import type {
   BattleDetail,
   Candidate,
@@ -280,6 +281,7 @@ function buildView(data: RoomData, now: number, storage: Db["kind"]): RoomView {
     const votes = data.votes.filter((v) => v.cardId === card.id);
     const entries = data.battle.filter((b) => b.cardId === card.id);
     const battleRevealed = card.phase !== "battle_lobby" && card.phase !== "battle_running";
+    const result = data.results.find((r) => r.cardId === card.id) ?? null;
 
     return {
       id: card.id,
@@ -297,6 +299,7 @@ function buildView(data: RoomData, now: number, storage: Db["kind"]): RoomView {
       locked: card.locked,
       pool: card.pool,
       tieCandidateIds: card.tieIds,
+      marble: marbleTiming(card, result),
       phaseStartedAt: card.phaseStartedAt,
       battleWinnerId: card.battleWinnerId,
       conditions,
@@ -320,7 +323,8 @@ function buildView(data: RoomData, now: number, storage: Db["kind"]): RoomView {
               taps: battleRevealed || b.memberId === me.id ? b.taps : null,
             }))
           : [],
-      result: data.results.find((r) => r.cardId === card.id) ?? null,
+      // 구슬 레이스는 재생이 끝날 때까지 결과를 보내지 않는다 (먼저 보고 김새지 않게)
+      result: card.phase === "marble_running" ? null : result,
     };
   });
 
@@ -340,8 +344,25 @@ function buildView(data: RoomData, now: number, storage: Db["kind"]): RoomView {
 }
 
 /** 시간 경과로 넘어가야 하는 단계(쟁탈전 종료)를 처리한다. 조건부 UPDATE라 여러 요청이 동시에 와도 한 번만 반영된다. */
+/** 구슬 레이스 재생 시각 (재생 중일 때만) */
+function marbleTiming(card: CardRow, result: DecisionResult | null): DecisionCardView["marble"] {
+  if (card.phase !== "marble_running" || result?.detail.kind !== "marble") return null;
+  return { startsAt: result.detail.startsAt, endsAt: result.detail.endsAt };
+}
+
 async function advanceTimers(db: Db, data: RoomData, now: number): Promise<boolean> {
   let changed = false;
+  // 구슬 레이스 재생이 끝나면 결과 공개
+  for (const card of data.cards) {
+    if (card.phase !== "marble_running") continue;
+    const timing = marbleTiming(card, data.results.find((r) => r.cardId === card.id) ?? null);
+    if (timing && now < timing.endsAt) continue;
+    const rows = await db.query(
+      `UPDATE decision_cards SET phase = 'result', updated_at = $1 WHERE id = $2 AND phase = 'marble_running' AND round = $3 RETURNING id`,
+      [now, card.id, card.round],
+    );
+    if (rows.length > 0) changed = true;
+  }
   for (const card of data.cards) {
     if (card.phase !== "battle_running" || card.phaseStartedAt === null) continue;
     if (now < battleWindow(card.phaseStartedAt).finalizeAt) continue;
@@ -445,6 +466,25 @@ export async function getInvitePreview(code: string) {
       isHost: Boolean(m.is_host),
     })),
   };
+}
+
+/**
+ * 재생 중인 구슬 레이스 기록. 결과가 공개된 뒤(재생이 끝난 뒤)에는 주지 않는다 → 늦게 들어온 사람은 결과만 본다.
+ * 용량이 커서(수십~수백 KB) 주기 조회 응답에 넣지 않고 따로 한 번만 받는다.
+ */
+export async function getMarbleRace(roomId: string, token: string | null, cardId: string) {
+  if (!(await memberIdByToken(roomId, token))) {
+    throw new AppError(401, "이 모임의 참가자가 아니에요. 초대 링크로 먼저 참여해주세요.", "NOT_MEMBER");
+  }
+  const db = await getDb();
+  const rows = await db.query(
+    `SELECT m.data, m.starts_at, m.ends_at FROM marble_races m
+     JOIN decision_cards c ON c.id = m.card_id AND c.round = m.round
+     WHERE m.card_id = $1 AND m.room_id = $2 AND c.phase = 'marble_running' AND m.ends_at > $3`,
+    [cardId, roomId, Date.now()],
+  );
+  if (rows.length === 0) throw new AppError(404, "재생 중인 구슬 레이스가 없어요.", "NO_RACE");
+  return { race: json<MarbleRace>(rows[0].data), startsAt: num(rows[0].starts_at), endsAt: num(rows[0].ends_at) };
 }
 
 export async function isMemberOf(roomId: string, token: string | null): Promise<boolean> {
@@ -610,7 +650,15 @@ function candidateParams(c: CandidateFields) {
 async function insertResult(
   db: Db,
   card: CardRow,
-  args: { candidate: Candidate; mode: DecisionMode; reasons: string[]; detail: ResultDetail; requiredPhase: CardPhase },
+  args: {
+    candidate: Candidate;
+    mode: DecisionMode;
+    reasons: string[];
+    detail: ResultDetail;
+    requiredPhase: CardPhase;
+    /** 결과 저장 뒤 단계. 구슬 레이스는 재생이 끝날 때까지 'marble_running' */
+    nextPhase?: CardPhase;
+  },
   now: number,
 ): Promise<boolean> {
   const rows = await db.query(
@@ -622,8 +670,8 @@ async function insertResult(
   );
   if (rows.length === 0) return false;
   await db.query(
-    `UPDATE decision_cards SET phase = 'result', updated_at = $1 WHERE id = $2 AND round = $3 AND phase = $4`,
-    [now, card.id, card.round, args.requiredPhase],
+    `UPDATE decision_cards SET phase = $5, updated_at = $1 WHERE id = $2 AND round = $3 AND phase = $4`,
+    [now, card.id, card.round, args.requiredPhase, args.nextPhase ?? "result"],
   );
   return true;
 }
@@ -763,7 +811,9 @@ export async function performAction(roomId: string, token: string | null, action
           "NO_ELIGIBLE",
         );
       }
-      const phase: CardPhase = action.mode === "vote" ? "voting" : action.mode === "roulette" ? "roulette_ready" : "battle_lobby";
+      const phase: CardPhase = (
+        { vote: "voting", roulette: "roulette_ready", battle: "battle_lobby", marble: "marble_ready" } as const satisfies Record<DecisionMode, CardPhase>
+      )[action.mode];
       const rows = await db.query(
         `UPDATE decision_cards SET stage = 'deciding', mode = $1, phase = $2, pool = $3::jsonb, tie_ids = '[]'::jsonb,
            phase_started_at = $4, battle_winner_id = NULL, updated_at = $4
@@ -839,6 +889,46 @@ export async function performAction(roomId: string, token: string | null, action
           ],
           detail: { kind: "roulette", pool: pool.map((c) => ({ candidateId: c.id, name: c.name })), winnerIndex: index, fromTie },
           requiredPhase: "roulette_ready",
+        },
+        now,
+      );
+      return;
+    }
+
+    case "startMarble": {
+      requireHost(me);
+      const card = requireCard(data, action.cardId);
+      requirePhase(card, "marble_ready", "구슬 레이스를 시작할 수 있는 단계가 아니에요.");
+      const evaluations = evaluateCard(data, card);
+      const pool = card.pool.map((id) => data.candidates.find((c) => c.id === id)).filter((c) => c !== undefined);
+      if (pool.length === 0) throw new AppError(409, "레이스에 넣을 후보가 없어요. 결정을 다시 진행해주세요.");
+      // 서버가 경주를 끝까지 계산해 저장하고, 모두 같은 기록을 같은 시각에 재생한다
+      const race = simulateMarbleRace(
+        pool.map((c) => ({ id: c.id, name: c.name })),
+        randomInt(2 ** 31),
+      );
+      const startsAt = Date.now() + MARBLE_COUNTDOWN_MS;
+      const endsAt = startsAt + race.durationMs + MARBLE_FINISH_HOLD_MS;
+      const saved = await db.query(
+        `INSERT INTO marble_races (card_id, round, room_id, data, starts_at, ends_at)
+         SELECT $1, $2, $3, $4::jsonb, $5, $6 WHERE EXISTS (
+           SELECT 1 FROM decision_cards WHERE id = $1 AND round = $2 AND phase = 'marble_ready')
+         ON CONFLICT (card_id, round) DO NOTHING RETURNING card_id`,
+        [card.id, card.round, roomId, JSON.stringify(race), startsAt, endsAt],
+      );
+      if (saved.length === 0) return; // 다른 요청이 먼저 시작함
+      const order = race.order.map((i) => ({ candidateId: race.ids[i], name: race.names[i] }));
+      const winner = pool.find((c) => c.id === order[0].candidateId)!;
+      await insertResult(
+        db,
+        card,
+        {
+          candidate: winner,
+          mode: "marble",
+          reasons: [`구슬 ${pool.length}개 중 가장 먼저 결승선 도착`, ...goodReasons(evaluations, winner.id)],
+          detail: { kind: "marble", order, startsAt, endsAt },
+          requiredPhase: "marble_ready",
+          nextPhase: "marble_running",
         },
         now,
       );
@@ -955,6 +1045,7 @@ export async function performAction(roomId: string, token: string | null, action
       await db.batch([
         { text: "DELETE FROM votes WHERE card_id = $1 AND round < $2", params: [card.id, rows[0].round] },
         { text: "DELETE FROM battle_entries WHERE card_id = $1 AND round < $2", params: [card.id, rows[0].round] },
+        { text: "DELETE FROM marble_races WHERE card_id = $1 AND round < $2", params: [card.id, rows[0].round] },
       ]);
       return;
     }
