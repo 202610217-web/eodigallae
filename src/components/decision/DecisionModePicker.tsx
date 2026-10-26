@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, CircleDot, CircleHelp, Dices, Hand, ListChecks, Play, Plus, TriangleAlert, Vote, type LucideIcon } from "lucide-react";
+import { ArrowLeft, CircleHelp, ListChecks, Play, Plus, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 import { useRoom } from "@/components/room/RoomProvider";
 import { Button } from "@/components/ui/Button";
@@ -9,15 +9,11 @@ import { CheckBadge } from "@/components/ui/StatusBadge";
 import { Notice } from "@/components/ui/States";
 import { cn } from "@/lib/client/cn";
 import { formatCost } from "@/lib/client/format";
-import { BATTLE_TAP_MS, type DecisionMode } from "@/lib/domain/constants";
+import type { DecisionMode } from "@/lib/domain/constants";
 import type { CandidateEvaluation, DecisionCardView } from "@/lib/domain/types";
+import { MODE_INFO } from "./modeInfo";
 
-export const MODE_INFO: Record<DecisionMode, { icon: LucideIcon; title: string; desc: string }> = {
-  vote: { icon: Vote, title: "다수결", desc: "한 사람당 한 표. 마감 전에는 득표수를 숨기고, 동점이면 룰렛으로." },
-  roulette: { icon: Dices, title: "운명의 룰렛", desc: "결정 대상 후보를 모두 같은 확률로 넣고 돌려요." },
-  battle: { icon: Hand, title: "결정권 쟁탈전", desc: `${BATTLE_TAP_MS / 1000}초 연타 대결! 1등이 결정 대상 후보 중 하나를 골라요.` },
-  marble: { icon: CircleDot, title: "구슬 레이스", desc: "후보 이름을 단 구슬이 장애물을 지나 떨어져요. 가장 먼저 도착한 구슬이 당첨!" },
-};
+export { MODE_INFO };
 
 /**
  * 결정 방식 고르기 → (조건 충돌·확인 필요 후보가 있으면) 후보별 이유를 보고 뺄 후보 고르기 → 결정 시작.

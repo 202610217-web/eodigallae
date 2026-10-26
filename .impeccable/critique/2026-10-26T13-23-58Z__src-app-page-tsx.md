@@ -10,6 +10,7 @@ target_fingerprint: "sha256:fa523107cecdb5fcb5c1ceb12f9fd6c42d17413fac5a6596a135
 target_path: "C:\\Users\\lhsnk\\Desktop\\eodigallae\\src\\app\\page.tsx"
 timestamp: 2026-10-26T13-23-58Z
 slug: src-app-page-tsx
+closed: true
 ---
 # 홈 화면 디자인 비평 (src/app/page.tsx)
 

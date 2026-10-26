@@ -199,7 +199,7 @@ function Running({ card }: { card: DecisionCardView }) {
               tap();
             }}
             onKeyDown={(e) => e.key === "Enter" && e.preventDefault()}
-            className="flex h-56 w-full touch-manipulation flex-col items-center justify-center rounded-3xl bg-coral-strong text-white select-none active:scale-[0.98] active:bg-[#d84a33] md:h-64"
+            className="flex h-56 w-full touch-manipulation flex-col items-center justify-center rounded-3xl bg-coral-strong text-white select-none active:scale-[0.98] active:bg-[#b93a26] md:h-64"
             aria-label="연타 버튼"
           >
             <span className="text-6xl font-black tabular-nums">{localCount}</span>
@@ -277,7 +277,7 @@ function Picking({ card }: { card: DecisionCardView }) {
                 key={c.id}
                 className={cn("flex cursor-pointer items-start gap-3 rounded-[var(--radius-card)] border-2 bg-white p-4", choice === c.id ? "border-coral-strong" : "border-transparent")}
               >
-                <input type="radio" name={`pick-${card.id}`} className="mt-1 size-5 accent-[#e9553d]" checked={choice === c.id} onChange={() => setChoice(c.id)} />
+                <input type="radio" name={`pick-${card.id}`} className="mt-1 size-5 accent-coral-strong" checked={choice === c.id} onChange={() => setChoice(c.id)} />
                 <span className="min-w-0 flex-1">
                   <span className="block font-bold break-words">{c.name}</span>
                   <span className="block text-sm text-ink-soft">{formatCost(c.cost, c.notes.cost)}</span>

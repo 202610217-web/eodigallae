@@ -1,4 +1,5 @@
 import { Bird, Cat, Crown, Dog, Fish, Rabbit, Snail, Squirrel, Turtle, type LucideIcon } from "lucide-react";
+import type { CSSProperties } from "react";
 import { cn } from "@/lib/client/cn";
 import { colorHex, type CharacterKey, type ColorKey } from "@/lib/domain/constants";
 
@@ -25,6 +26,7 @@ export function Avatar({
   size = "md",
   crown,
   className,
+  style,
   label,
 }: {
   character: CharacterKey;
@@ -32,12 +34,13 @@ export function Avatar({
   size?: keyof typeof SIZES;
   crown?: boolean;
   className?: string;
+  style?: CSSProperties;
   label?: string;
 }) {
   const Icon = CHARACTER_ICON[character] ?? Cat;
   const hex = colorHex(color);
   return (
-    <span className={cn("relative inline-flex shrink-0", className)}>
+    <span className={cn("relative inline-flex shrink-0", className)} style={style}>
       <span
         role={label ? "img" : undefined}
         aria-label={label}

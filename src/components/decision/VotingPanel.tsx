@@ -96,7 +96,7 @@ export function VotingPanel({ card }: { card: DecisionCardView }) {
                 choice === c.id ? "border-coral-strong" : "border-transparent",
               )}
             >
-              <input type="radio" name={`vote-${card.id}`} className="mt-1 size-5 accent-[#e9553d]" checked={choice === c.id} onChange={() => setChoice(c.id)} />
+              <input type="radio" name={`vote-${card.id}`} className="mt-1 size-5 accent-coral-strong" checked={choice === c.id} onChange={() => setChoice(c.id)} />
               <span className="min-w-0 flex-1">
                 <span className="block font-bold break-words">{c.name}</span>
                 <span className="block text-sm text-ink-soft">{formatCost(c.cost, c.notes.cost)}</span>

@@ -3,11 +3,11 @@
 /* ───── 디자인 토큰 ───── */
 @theme {
   --color-coral: #ff755e;
-  --color-coral-strong: #e9553d; /* 흰 글자를 올리는 주요 버튼 배경 */
+  --color-coral-strong: #d0432d; /* 흰 글자를 올리는 주요 버튼 배경 (흰 글자 대비 4.6:1) */
   --color-coral-soft: #ffe9e4;
   --color-ink: #252d3b;
   --color-ink-soft: #545e70;
-  --color-ink-faint: #8a92a1;
+  --color-ink-faint: #6f7786; /* 흰 배경 대비 4.5:1 */
   --color-cream: #f5f1ea;
   --color-cream-deep: #ece6db;
   --color-line: #e6e0d5;

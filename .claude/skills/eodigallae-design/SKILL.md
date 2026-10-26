@@ -24,9 +24,9 @@ Tailwind 클래스로 쓴다: `bg-cream`, `text-ink-soft`, `border-line` 등.
 | `white` | — | 카드, 입력창, secondary 버튼, 하단 고정 바 |
 | `ink` | #252d3b | 본문·제목 |
 | `ink-soft` | #545e70 | 보조 설명, 아이콘 |
-| `ink-faint` | #8a92a1 | placeholder, 힌트, 비활성 글자, 화살표 아이콘 |
+| `ink-faint` | #6f7786 | placeholder, 힌트, 비활성 글자, 화살표 아이콘 (흰 배경 대비 4.5:1) |
 | `coral` | #ff755e | 포인트(진행 막대, 포커스 테두리, 로딩 아이콘). **흰 글자 배경으로 쓰지 않음** |
-| `coral-strong` | #e9553d | 주요 버튼 배경, 순위 숫자, 포커스 outline |
+| `coral-strong` | #d0432d | 주요 버튼 배경, 순위 숫자, 포커스 outline, 로고 (흰 글자 대비 4.6:1) |
 | `coral-soft` | #ffe9e4 | 선택된 칩 배경, 빈 화면 아이콘 배경 |
 | `success` / `success-ink` | #e6f4ea / #1d7442 | 통과·확정 |
 | `info` / `info-ink` | #e8f0ff / #2a59c2 | 수집 중, 안내 |
@@ -34,7 +34,7 @@ Tailwind 클래스로 쓴다: `bg-cream`, `text-ink-soft`, `border-line` 등.
 | `danger` / `danger-ink` | #fde9e6 / #bf3427 | 충돌, 오류, 제외 |
 
 - 상태 색은 항상 **연한 배경 + 같은 계열 진한 글자** 짝으로 쓴다 (`bg-warning text-warning-ink`).
-- 코드에 이미 있는 예외 hex(이것만 허용): 주요 버튼 hover `#d84a33`, 비활성 `#f2b3a8`, 코랄 칩 글자 `#b9412c`, success 버튼 hover `#165e35`, danger 테두리 `#f3c4bd`, 확정 카드 테두리 `#bfe2cb`, 왕관 `#FFC93C`/`#B7860B`. 새 색이 필요하면 `@theme`에 토큰으로 추가한다.
+- 코드에 이미 있는 예외 hex(이것만 허용): 주요 버튼 hover `#b93a26`, 비활성 `#f2b3a8`, 코랄 칩 글자 `#b9412c`, success 버튼 hover `#165e35`, danger 테두리 `#f3c4bd`, 확정 카드 테두리 `#bfe2cb`, 왕관 `#FFC93C`/`#B7860B`. 새 색이 필요하면 `@theme`에 토큰으로 추가한다.
 - 참가자 색은 `src/lib/domain/constants.ts`의 `colorHex()`로만 쓴다 (배경은 hex + `26` 투명도).
 - 다크 모드는 없다. 만들지 않는다.
 
@@ -59,7 +59,8 @@ Tailwind 클래스로 쓴다: `bg-cream`, `text-ink-soft`, `border-line` 등.
 - 둥글기: 카드 `rounded-[var(--radius-card)]`(16px) · 입력/버튼/정보 상자/Notice `rounded-xl` · 작은 버튼·세그먼트 항목 `rounded-lg` · 아이콘 상자 `rounded-xl`/`rounded-2xl` · 칩·배지·진행 막대 `rounded-full` · 시트 `rounded-t-3xl`(모바일) / `md:rounded-l-3xl`.
 - 그림자는 거의 쓰지 않는다. 구분은 **크림 배경 위 흰 카드**와 `border-line`으로. 예외: 선택된 세그먼트 `shadow-sm`.
 - 카드 패딩 `p-4`(목록 카드) / `p-5`(단독 섹션). 페이지 좌우 `px-4`.
-- 레이아웃 폭: 시작·생성·참여 화면은 `PageShell`(`max-w-xl`), 홈은 `max-w-md md:max-w-lg`.
+- 레이아웃 폭: 시작·생성·참여 화면은 `PageShell`(`max-w-xl`), 홈은 `max-w-md md:max-w-lg lg:max-w-5xl`(넓은 화면 두 칸, 배치는 `src/app/HomeLayout.tsx`).
+- 그리드 열은 `grid-cols-1`처럼 명시한다. 열 정의 없는 그리드는 긴 글자(`truncate`)가 칸을 밀어 가로 스크롤이 생긴다.
 - **터치 영역 최소 44px**: 버튼·칩·아이콘 버튼은 `min-h-11` 또는 `size-11` 이상. 입력창은 `min-h-12`.
 
 ## 컴포넌트 (먼저 재사용)
@@ -72,7 +73,7 @@ Tailwind 클래스로 쓴다: `bg-cream`, `text-ink-soft`, `border-line` 등.
 | `ui/States.tsx` | `EmptyState`, `LoadingState`, `ErrorState`, `Notice`(info/warning/danger/success 안내 상자) |
 | `ui/Sheet.tsx` | 모바일 바텀시트 ↔ md 이상 오른쪽 패널. `size="wide"`, `footer`. 모달은 이것만 쓴다 |
 | `ui/BottomActionBar.tsx` | 모바일 하단 고정 주요 행동 (md 이상에서는 일반 흐름) |
-| `ui/Avatar.tsx` | 동물 캐릭터 + 참가자 색, `crown` |
+| `ui/Avatar.tsx` | 동물 캐릭터 + 참가자 색, `crown`, `style`(애니메이션 변수용) |
 | `ui/TasteChip.tsx` | 취향 칩·태그 (순위 숫자는 코랄) |
 | `PageShell.tsx` | 좁은 단일 열 페이지 + "처음으로" 링크 |
 
@@ -103,7 +104,8 @@ Tailwind 클래스로 쓴다: `bg-cream`, `text-ink-soft`, `border-line` 등.
 
 ## 접근성
 
-- 포커스는 전역 `:focus-visible`(코랄 outline). 입력은 `focus:border-coral focus:outline-none`.
+- 포커스는 전역 `:focus-visible`(코랄 outline). 입력은 `TextInput`이 2px `coral-strong` 테두리로 처리하고, `aria-invalid`면 테두리가 `danger-ink`가 된다.
+- 흰 글자는 `coral-strong` 이상 진한 배경에만 올린다(4.5:1). 새 색을 고를 때도 본문·placeholder 4.5:1을 지킨다.
 - 선택형은 `role="radio"`/`aria-checked` 또는 `aria-pressed`, 로딩 버튼은 `aria-busy`, 오류는 `role="alert"`.
 - 아이콘만 있는 버튼에는 `aria-label`.
 

@@ -16,7 +16,7 @@ export function Label({ htmlFor, children, hint }: { htmlFor?: string; children:
 }
 
 const inputClass =
-  "w-full min-h-12 rounded-xl border border-line bg-white px-3.5 text-base text-ink placeholder:text-ink-faint focus:border-coral focus:outline-none disabled:bg-cream-deep";
+  "w-full min-h-12 rounded-xl border border-line bg-white px-3.5 text-base text-ink placeholder:text-ink-faint focus:border-coral-strong focus:shadow-[inset_0_0_0_1px_var(--color-coral-strong)] focus:outline-none aria-invalid:border-danger-ink disabled:bg-cream-deep";
 
 export function TextInput({ className, ...rest }: InputHTMLAttributes<HTMLInputElement>) {
   return <input className={cn(inputClass, className)} {...rest} />;
@@ -94,10 +94,10 @@ export function ToggleChip({
   );
 }
 
-export function FieldError({ children }: { children?: ReactNode }) {
+export function FieldError({ children, id }: { children?: ReactNode; id?: string }) {
   if (!children) return null;
   return (
-    <p role="alert" className="mt-2 text-sm font-medium text-danger-ink">
+    <p id={id} role="alert" className="mt-2 text-sm font-medium text-danger-ink">
       {children}
     </p>
   );

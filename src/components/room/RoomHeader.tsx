@@ -12,7 +12,7 @@ import { useRoom } from "./RoomProvider";
 export function Logo({ compact = false }: { compact?: boolean }) {
   return (
     <span className="inline-flex items-center gap-2">
-      <span className="flex size-9 items-center justify-center rounded-xl bg-coral text-white">
+      <span className="flex size-9 items-center justify-center rounded-xl bg-coral-strong text-white">
         <MapPin className="size-5" strokeWidth={2.5} aria-hidden />
       </span>
       {!compact && <span className="text-lg font-extrabold tracking-tight">어디갈래?</span>}
