@@ -69,7 +69,7 @@ Tailwind 클래스로 쓴다: `bg-cream`, `text-ink-soft`, `border-line` 등.
 | --- | --- |
 | `ui/Button.tsx` | `variant`: primary(코랄) · secondary(흰+테두리) · ghost · danger · success / `size`: sm·md·lg / `loading`, `icon`, `block` |
 | `ui/Field.tsx` | `Label`(hint 가능), `TextInput`, `TextArea`, `Segmented`(단일 선택), `ToggleChip`(다중 선택, tone coral/danger), `FieldError` |
-| `ui/StatusBadge.tsx` | `Pill`(tone별 배지), `StatusBadge`, `CheckBadge`, `LockedBadge`, `WaitingBadge` |
+| `ui/StatusBadge.tsx` | `Pill`(tone별 배지), `StatusBadge`, `LockedBadge`, `WaitingBadge` |
 | `ui/States.tsx` | `EmptyState`, `LoadingState`, `ErrorState`, `Notice`(info/warning/danger/success 안내 상자) |
 | `ui/Sheet.tsx` | 모바일 바텀시트 ↔ md 이상 오른쪽 패널. `size="wide"`, `footer`. 모달은 이것만 쓴다 |
 | `ui/BottomActionBar.tsx` | 모바일 하단 고정 주요 행동 (md 이상에서는 일반 흐름) |
@@ -91,8 +91,8 @@ Tailwind 클래스로 쓴다: `bg-cream`, `text-ink-soft`, `border-line` 등.
 ## 상태 표시 규칙
 
 - **색만으로 구분하지 않는다.** 상태에는 항상 아이콘 + 한국어 문구를 같이 쓴다 (`Pill`/`StatusBadge` 사용).
-- 카드 단계: 조건 수집 중(info) → 후보 확인(warning) → 결정 중(coral) → 확정(success).
-- 후보 판정: 필수 조건 통과(success) / 확인 필요(warning) / 조건 충돌(danger).
+- 카드 단계: 의견 수집 중(info) → 후보 확인(warning) → 결정 중(coral) → 확정(success).
+- 의견 투표 질문·보기는 방장이 만든 자유 내용이라 후보를 통과·충돌로 판정하거나 점수를 매기지 않는다. 집계는 인원 수와 기타 의견 원문만 보여준다.
 - 빈 화면에는 반드시 다음 행동을 알려준다 (`EmptyState`의 `description`·`action`).
 
 ## 움직임
@@ -111,6 +111,6 @@ Tailwind 클래스로 쓴다: `bg-cream`, `text-ink-soft`, `border-line` 등.
 
 ## 문구 톤
 
-- 다정한 해요체: "내 조건을 입력해주세요", "조건을 만족하는 후보가 없어요", "불러오는 중이에요".
+- 다정한 해요체: "의견을 제출해주세요", "아직 등록된 후보가 없어요", "불러오는 중이에요".
 - 짧고 구체적으로, 다음에 할 일을 말한다. 기술 용어(토큰, 서버, DB) 대신 사용자 말로.
-- 상태 이름은 위 목록의 표현을 그대로 쓴다 (예: "조건 충돌", "확인 필요"는 바꾸지 않는다).
+- 상태 이름은 위 목록의 표현을 그대로 쓴다 (예: "의견 수집 중", "후보 확인"은 바꾸지 않는다).

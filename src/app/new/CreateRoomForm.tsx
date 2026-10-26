@@ -4,12 +4,14 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { DEFAULT_PROFILE, ProfileFields, type ProfileDraft } from "@/components/ProfileFields";
 import { usePrefillProfile } from "@/components/account/useAccount";
+import { toQuestionInputs } from "@/components/room/QuestionFields";
 import { BottomActionBar } from "@/components/ui/BottomActionBar";
 import { Button } from "@/components/ui/Button";
 import { FieldError, Label, TextInput } from "@/components/ui/Field";
 import { api } from "@/lib/client/api";
 import { tripDayCount } from "@/lib/client/format";
 import { LIMITS } from "@/lib/domain/constants";
+import { normalizeQuestions } from "@/lib/domain/opinion";
 import { createRoomSchema } from "@/lib/validation";
 import { CardBuilder, type CardDraft } from "./CardBuilder";
 
@@ -45,13 +47,28 @@ export function CreateRoomForm() {
       tripStart,
       tripEnd: tripEnd || null,
       // 여행 기간을 줄였으면 범위를 벗어난 일차는 마지막 날로 맞춘다
-      cards: cards.map(({ title, icon, day, time }) => ({ title, icon, day: day === null ? null : Math.min(day, dayCount), time })),
+      cards: cards.map(({ title, icon, category, day, time, questions }) => ({
+        title,
+        icon,
+        category,
+        day: day === null ? null : Math.min(day, dayCount),
+        time,
+        questions: toQuestionInputs(questions),
+      })),
       host: profile,
     });
     if (!parsed.success) {
       const issue = parsed.error.issues[0];
       setError(issue?.path[0] === "tripStart" ? "여행 시작 날짜를 골라주세요." : (issue?.message ?? "입력 값을 확인해주세요."));
       return;
+    }
+    // 카드마다 질문을 서버와 같은 규칙으로 먼저 확인한다
+    for (const card of parsed.data.cards) {
+      const checked = normalizeQuestions(card.questions, (p) => p);
+      if (!checked.ok) {
+        setError(`‘${card.title}’ 카드: ${checked.error}`);
+        return;
+      }
     }
     setError(null);
     setSubmitting(true);
@@ -91,7 +108,7 @@ export function CreateRoomForm() {
 
       <Section step={2} title="결정 카드">
         <p className="mb-3 text-sm text-ink-soft">
-          함께 정할 항목을 직접 만들어주세요. 카드마다 조건과 후보를 따로 모아요. 일차와 시간을 정해두면 모두 확정된 뒤 시간순 일정표로 보여드려요.
+          함께 정할 항목을 직접 만들어주세요. 카드마다 의견 투표와 후보를 따로 모아요. 일차와 시간을 정해두면 모두 확정된 뒤 시간순 일정표로 보여드려요.
         </p>
         <CardBuilder cards={cards} onChange={setCards} dayCount={dayCount} tripStart={tripStart} />
       </Section>

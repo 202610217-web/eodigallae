@@ -283,7 +283,7 @@ function DeleteSection() {
       ) : (
         <form onSubmit={submit} className="space-y-4" noValidate>
           <Notice tone="danger" icon={<TriangleAlert className="size-4" aria-hidden />} title="정말 탈퇴할까요?">
-            아이디·비밀번호·프로필이 지워지고 되돌릴 수 없어요. 참여했던 모임의 기록(조건·후보·투표)은 친구들을 위해 남지만, 이 계정으로는 다시 들어갈 수 없어요.
+            아이디·비밀번호·프로필이 지워지고 되돌릴 수 없어요. 참여했던 모임의 기록(의견·후보·투표)은 친구들을 위해 남지만, 이 계정으로는 다시 들어갈 수 없어요.
           </Notice>
           <label className="flex min-h-11 items-center gap-3 text-sm font-semibold">
             <input type="checkbox" className="size-5 accent-coral-strong" checked={agree} onChange={(e) => setAgree(e.target.checked)} />

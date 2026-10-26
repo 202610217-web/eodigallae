@@ -179,3 +179,19 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS character text;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS color text;
 -- 비밀번호 재설정용 복구 코드의 해시 (원문은 만들 때 한 번만 보여주고 저장하지 않음). 한 번 쓰면 지운다
 ALTER TABLE users ADD COLUMN IF NOT EXISTS recovery_hash text;
+
+-- 의견 투표: 방장이 일정(결정 카드)마다 직접 만드는 질문. [{id, title, multiple, options: [{id, label}]}]
+-- '기타'(직접 입력)는 보기로 저장하지 않고 모든 질문에 기본으로 붙는다. 응답이 하나라도 있으면 바꿀 수 없다.
+ALTER TABLE decision_cards ADD COLUMN IF NOT EXISTS questions jsonb NOT NULL DEFAULT '[]'::jsonb;
+-- 제출한 의견. 사람·일정당 한 행이라 다시 제출하면 갱신되고 중복 집계되지 않는다. 임시 입력은 저장하지 않는다.
+-- answers: {질문 id: {optionIds: [보기 id], other: 기타 내용 | null}}
+CREATE TABLE IF NOT EXISTS opinion_responses (
+  card_id         text NOT NULL REFERENCES decision_cards(id) ON DELETE CASCADE,
+  member_id       text NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+  room_id         text NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+  answers         jsonb NOT NULL,
+  submitted_at    double precision NOT NULL,
+  updated_at      double precision NOT NULL,
+  PRIMARY KEY (card_id, member_id)
+);
+CREATE INDEX IF NOT EXISTS opinion_responses_room_idx ON opinion_responses(room_id);

@@ -34,7 +34,7 @@ export function DecisionFlow({ card, onAddCandidate }: { card: DecisionCardView;
     const msg =
       card.stage === "confirmed"
         ? "확정을 취소하고 이 카드를 다시 진행할까요? 확정된 일정에서 빠져요."
-        : "진행 중인 결정을 취소할까요? 투표·게임 기록이 초기화되고 후보와 조건을 다시 수정할 수 있어요.";
+        : "진행 중인 결정을 취소할까요? 투표·게임 기록이 초기화되고 후보와 의견을 다시 수정할 수 있어요.";
     if (!window.confirm(msg)) return;
     setResetting(true);
     await act({ type: "resetDecision", cardId: card.id });

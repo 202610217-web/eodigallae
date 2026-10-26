@@ -14,8 +14,8 @@ const DEMO_FRIENDS: { nickname: string; character: CharacterKey; color: ColorKey
 
 const STEPS: { icon: LucideIcon; title: string; text: ReactNode }[] = [
   { icon: Users, title: "모임 만들고 초대", text: "초대 코드나 링크를 단톡방에 보내면 친구들이 들어와요." },
-  { icon: ListChecks, title: "조건과 취향 모으기", text: "예산, 못 먹는 음식, 꼭 피하고 싶은 것까지 각자 남겨요." },
-  { icon: Scale, title: "후보 비교", text: "누구의 어떤 조건과 맞지 않는지 이유가 함께 보여요." },
+  { icon: ListChecks, title: "의견 투표", text: "방장이 일정마다 만든 질문에 각자 답하고, 제출하면 익명 집계를 봐요." },
+  { icon: Scale, title: "후보 등록", text: "의견 집계를 참고해서 식당·활동·숙소 후보를 올려요." },
   { icon: CalendarCheck, title: "함께 결정하고 일정표로", text: <ModeChips /> },
 ];
 
@@ -61,7 +61,7 @@ export function HomeGuide() {
         <span className="min-w-0 flex-1">
           <span className="block font-bold leading-snug">데모 모임 둘러보기</span>
           <span className="block text-sm text-balance text-ink-soft">
-            {DEMO_FRIENDS.map((f) => f.nickname).join("·")}의 조건과 후보가 미리 들어 있어요
+            {DEMO_FRIENDS.map((f) => f.nickname).join("·")}의 의견과 후보가 미리 들어 있어요
           </span>
         </span>
         <ChevronRight className="size-5 shrink-0 text-ink-faint" aria-hidden />

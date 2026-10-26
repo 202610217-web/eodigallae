@@ -26,7 +26,7 @@ export function MemberStatusList() {
         </h2>
         <div className="flex shrink-0 items-center gap-1">
           <Pill tone={readyCount === view.members.length ? "success" : "neutral"} icon={<CircleCheck className="size-3.5" aria-hidden />}>
-            {readyCount}/{view.members.length}명 준비 완료
+            {readyCount}/{view.members.length}명 의견 완료
           </Pill>
           {view.me.isHost && !alone && (
             <Button
@@ -53,7 +53,7 @@ export function MemberStatusList() {
               <Avatar character={member.character} color={member.color} size="md" />
               {ready && (
                 <span className="absolute -right-1 -bottom-1 flex size-5 animate-pop items-center justify-center rounded-full bg-success-ink text-white ring-2 ring-white">
-                  <CircleCheck className="size-3.5" aria-label="준비 완료" />
+                  <CircleCheck className="size-3.5" aria-label="의견 제출 완료" />
                 </span>
               )}
             </span>
@@ -64,7 +64,7 @@ export function MemberStatusList() {
                 {member.id === view.me.id && <span className="shrink-0 text-xs font-medium text-coral-strong">나</span>}
               </p>
               <p className="truncate text-xs text-ink-soft">
-                조건 {readyCards}/{totalCards}
+                의견 {readyCards}/{totalCards}
               </p>
             </div>
           </li>
@@ -74,7 +74,7 @@ export function MemberStatusList() {
       {alone && (
         <div className="mt-3 rounded-xl bg-info p-3 text-sm text-info-ink">
           <p className="font-bold">친구를 초대해 여행을 시작해보세요.</p>
-          <p className="mt-0.5 text-ink">친구가 들어오면 취향과 조건을 함께 모을 수 있어요.</p>
+          <p className="mt-0.5 text-ink">친구가 들어오면 일정마다 의견을 함께 모을 수 있어요.</p>
           <Button className="mt-2" size="sm" variant="secondary" icon={<UserPlus className="size-4" aria-hidden />} onClick={() => setInviteOpen(true)}>
             초대 링크 열기
           </Button>

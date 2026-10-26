@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "어디갈래? — 취향은 모으고, 결정은 함께!",
-  description: "친구들과 여행 취향과 조건을 모으고, 후보를 비교하고, 게임으로 함께 결정하는 여행 모임 보드",
+  description: "친구들과 일정마다 의견을 모으고, 후보를 올리고, 게임으로 함께 결정하는 여행 모임 보드",
 };
 
 export const viewport: Viewport = {

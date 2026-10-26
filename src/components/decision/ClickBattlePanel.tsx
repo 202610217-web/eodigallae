@@ -2,7 +2,6 @@
 
 import { CircleCheck, Crown, Hand, Hourglass, Keyboard, Play, Trophy } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
-import { IssueHint } from "@/components/room/IssueHint";
 import { useRoom } from "@/components/room/RoomProvider";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
@@ -48,7 +47,7 @@ function Lobby({ card }: { card: DecisionCardView }) {
           <li className="flex flex-wrap items-center gap-1">
             3. PC는 <kbd className="rounded border border-line bg-cream px-1.5 font-mono text-xs">Space</kbd> 키, 모바일은 큰 버튼을 눌러요.
           </li>
-          <li>4. 가장 많이 누른 사람이 필수 조건을 통과한 후보 중 하나를 골라요.</li>
+          <li>4. 가장 많이 누른 사람이 결정 대상 후보 중 하나를 골라요.</li>
         </ol>
         <p className="mt-3 text-xs text-ink-soft">키를 누르고 있거나 시간이 끝난 뒤 누른 입력은 세지 않아요. 횟수는 서버가 시간을 기준으로 다시 검증해요.</p>
       </div>
@@ -268,7 +267,7 @@ function Picking({ card }: { card: DecisionCardView }) {
       {isWinner ? (
         <div className="space-y-3">
           <Notice tone="success" icon={<Crown className="size-5 animate-crown" aria-hidden />} title="결정권 획득! 장소를 골라주세요">
-            결정 대상 후보 중에서 골라요. 조건 충돌·확인 필요 후보는 표시된 이유를 확인하고 골라주세요.
+            결정 대상 후보 중에서 골라요. 의견 투표 집계를 떠올리며 골라주세요.
           </Notice>
           <fieldset className="space-y-2">
             <legend className="sr-only">후보 선택</legend>
@@ -282,7 +281,6 @@ function Picking({ card }: { card: DecisionCardView }) {
                   <span className="block font-bold break-words">{c.name}</span>
                   <span className="block text-sm text-ink-soft">{formatCost(c.cost, c.notes.cost)}</span>
                   <TasteTags tags={c.tags} className="mt-1.5" />
-                  <IssueHint evaluation={card.evaluations.find((e) => e.candidateId === c.id)} />
                 </span>
               </label>
             ))}

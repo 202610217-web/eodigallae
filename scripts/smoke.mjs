@@ -1,9 +1,21 @@
 // 실행 중인 서버에 여러 참가자(쿠키 분리)로 접속해 전체 흐름과 예외 상황을 검증한다.
-// 사용법: npm run dev 실행 후 → BASE_URL=http://localhost:3000 npm run smoke
+// 실행할 때마다 테스트 계정 4개와 모임 여러 개를 만든다. 그래서 보통은 이 파일을 직접 돌리지 않는다.
+//   npm run smoke                              → 내장 DB(메모리)로 띄운 테스트 서버에서 실행 (공유 DB에 남지 않음)
+//   BASE_URL=https://<배포주소> npm run smoke:url → 일부러 실제 서버·DB에 확인할 때만 (테스트 데이터가 남는다)
 
 import assert from "node:assert/strict";
 
-const BASE = process.env.BASE_URL ?? "http://localhost:3000";
+// npm run dev 서버는 .env.local의 공유 DB를 쓰므로, 주소를 직접 고른 실행이 아니면 막는다
+const allowShared = process.argv.includes("--allow-shared-db");
+if (!process.env.SMOKE_ISOLATED && !(allowShared && process.env.BASE_URL)) {
+  console.error(
+    "스모크 테스트는 `npm run smoke`로 실행해주세요 (공유 DB를 쓰지 않는 테스트 서버를 띄워요).\n" +
+      "실제 서버·DB에 일부러 돌릴 때만: BASE_URL=<주소> npm run smoke:url  (테스트 계정·모임이 그 DB에 남아요)",
+  );
+  process.exit(1);
+}
+
+const BASE = process.env.BASE_URL;
 let passed = 0;
 
 class Client {
@@ -47,21 +59,25 @@ async function check(label, fn) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const profile = (nickname, character = "cat", color = "coral") => ({ nickname, character, color });
-const cond = (cardId, patch = {}) => ({
-  type: "saveCondition",
-  condition: { cardId, maxBudget: null, restrictions: [], setting: "any", vibe: "any", wish: "", note: "", ready: true, ...patch },
-});
 const cand = (name, patch = {}) => ({
   name,
   cost: 10000,
   tags: ["food"],
-  features: [],
-  setting: "indoor",
-  vibe: "quiet",
   link: "",
   description: "",
   ...patch,
 });
+// 의견 투표: 질문 저장 / 보기 이름으로 응답 만들기 (other: 기타 내용)
+const saveQuestions = (cardId, questions) => ({ type: "saveQuestions", cardId, questions });
+function answersFor(card, picks) {
+  return Object.fromEntries(
+    card.opinion.questions.map((q) => {
+      const p = picks[q.title] ?? { labels: [q.options[0].label] };
+      return [q.id, { optionIds: (p.labels ?? []).map((l) => q.options.find((o) => o.label === l).id), other: p.other ?? null }];
+    }),
+  );
+}
+const submitOpinion = (card, picks = {}) => ({ type: "submitOpinion", cardId: card.id, answers: answersFor(card, picks) });
 
 const host = new Client("host");
 const alice = new Client("alice");
@@ -127,15 +143,44 @@ await check("잘못된 입력은 400 (종료일이 시작일보다 빠름)", asy
   assert.equal(r.status, 400);
 });
 
-await check("결정 카드는 아이콘으로 만들고, 카드 종류는 아이콘에서 정해짐", async () => {
+await check("결정 카드: 아이콘(장식)과 종류를 따로 저장, 종류가 없으면 아이콘 묶음으로", async () => {
   const base = { name: "아이콘 모임", tripStart: "2026-11-07", tripEnd: null, host: profile("아이콘") };
   assert.equal((await host.req("/api/rooms", { ...base, cards: [{ title: "카페", icon: "없는아이콘" }] })).status, 400);
   assert.equal((await host.req("/api/rooms", { ...base, cards: [{ title: "카페" }] })).status, 400); // 아이콘도 종류도 없음
-  const r = await host.req("/api/rooms", { ...base, cards: [{ title: "카페 투어", icon: "coffee" }, { title: "캠핑장", icon: "tent", day: 1, time: "16:00" }] });
+  const r = await host.req("/api/rooms", {
+    ...base,
+    cards: [{ title: "카페 투어", icon: "coffee" }, { title: "캠핑장 놀이", icon: "tent", category: "activity", day: 1, time: "16:00" }],
+  });
   assert.equal(r.status, 200);
   const cards = (await host.state(r.data.roomId)).data.cards;
-  assert.deepEqual(cards.map((c) => [c.icon, c.category]), [["coffee", "meal"], ["tent", "stay"]]);
+  assert.deepEqual(cards.map((c) => [c.icon, c.category]), [["coffee", "meal"], ["tent", "activity"]]);
   assert.equal(cards[1].time, "16:00");
+  assert.deepEqual(cards[0].opinion.questions, [], "새 카드는 질문 없이 시작 (앱이 질문을 정하지 않음)");
+});
+
+await check("모임을 만들 때 카드마다 의견 투표 질문을 정할 수 있고, 잘못된 질문은 거절", async () => {
+  const base = { name: "질문 모임", tripStart: "2026-11-07", tripEnd: null, host: profile("질문") };
+  const bad = await host.req("/api/rooms", {
+    ...base,
+    cards: [{ title: "점심", icon: "soup", category: "meal", questions: [{ title: "메뉴", multiple: false, options: ["한식", "기타"] }] }],
+  });
+  assert.equal(bad.status, 400);
+  assert.match(bad.data.error, /‘점심’ 카드/);
+  const r = await host.req("/api/rooms", {
+    ...base,
+    cards: [
+      { title: "점심", icon: "soup", category: "meal", questions: [{ title: "예산", multiple: false, options: ["1만 원 이하", "2만 원 이하"] }] },
+      { title: "숙소", icon: "hotel", category: "stay", questions: [{ title: "침대 개수", multiple: true, options: ["1개", "2개"] }] },
+      { title: "카페", icon: "coffee", category: "meal" },
+    ],
+  });
+  assert.equal(r.status, 200);
+  const cards = (await host.state(r.data.roomId)).data.cards;
+  assert.deepEqual(cards.map((c) => c.opinion.questions.map((q) => [q.title, q.multiple, q.options.map((o) => o.label)])), [
+    [["예산", false, ["1만 원 이하", "2만 원 이하"]]],
+    [["침대 개수", true, ["1개", "2개"]]],
+    [],
+  ]);
 });
 
 await check("유효하지 않은 초대 코드는 404", async () => {
@@ -183,70 +228,177 @@ await check("취향 1~3순위 저장, 중복 순위는 거절", async () => {
   assert.deepEqual(s.me.taste, ["rest", "food", "photo"]);
 });
 
-// ── 조건 + 후보 + 판정 ──
-await check("조건 저장 → 준비 상태가 카드별로 분리됨", async () => {
-  await host.act(roomId, cond(lunch, { maxBudget: 20000 }));
-  await alice.act(roomId, cond(lunch, { maxBudget: 15000, restrictions: ["해산물"], ready: false }));
-  s = (await host.state(roomId)).data;
-  assert.equal(s.cards[0].status, "collecting");
-  await alice.act(roomId, { type: "setConditionReady", cardId: lunch, ready: true });
-  await bob.act(roomId, cond(lunch));
-  s = (await host.state(roomId)).data;
-  assert.equal(s.cards[0].status, "reviewing");
-  assert.equal(s.cards[1].status, "collecting");
+// ── 의견 투표 ──
+const cardOf = (view, id) => view.cards.find((c) => c.id === id);
+const LUNCH_QUESTIONS = [
+  { title: "예산", multiple: false, options: ["1만 원 이하", "2만 원 이하"] },
+  { title: "피할 음식", multiple: true, options: ["날것", "해산물", "매운 음식"] },
+];
+const STAY_QUESTIONS = [
+  { title: "1박 가격", multiple: false, options: ["10만 원 이하", "20만 원 이하"] },
+  { title: "침대 개수", multiple: false, options: ["1개", "2개"] },
+  { title: "수영장", multiple: false, options: ["필요", "없어도 됨"] },
+];
+
+await check("방장이 일정마다 다른 질문·보기를 직접 만든다 (응답 전에는 다시 고칠 수 있음)", async () => {
+  assert.equal((await host.act(roomId, saveQuestions(lunch, [{ title: "임시", multiple: false, options: ["a", "b"] }]))).status, 200);
+  assert.equal((await host.act(roomId, saveQuestions(lunch, LUNCH_QUESTIONS))).status, 200);
+  assert.equal((await host.act(roomId, saveQuestions(stay, STAY_QUESTIONS))).status, 200);
+  s = (await alice.state(roomId)).data;
+  assert.deepEqual(cardOf(s, lunch).opinion.questions.map((q) => [q.title, q.multiple, q.options.map((o) => o.label)]), [
+    ["예산", false, ["1만 원 이하", "2만 원 이하"]],
+    ["피할 음식", true, ["날것", "해산물", "매운 음식"]],
+  ]);
+  assert.deepEqual(cardOf(s, stay).opinion.questions.map((q) => q.title), ["1박 가격", "침대 개수", "수영장"]);
+  assert.deepEqual(cardOf(s, activity).opinion.questions, []);
 });
 
-await check("허용되지 않은 제외 조건 값은 거절", async () => {
-  const r = await bob.act(roomId, cond(lunch, { restrictions: ["없는 항목"] }));
-  assert.equal(r.status, 400);
+await check("일반 참가자는 질문·보기를 바꿀 수 없음", async () => {
+  const r = await alice.act(roomId, saveQuestions(lunch, [{ title: "내 질문", multiple: false, options: ["a", "b"] }]));
+  assert.equal(r.status, 403);
+  assert.equal((await bob.act(roomId, { type: "setCardIcon", cardId: lunch, icon: "coffee" })).status, 403);
+});
+
+await check("질문 검증: 빈 값·중복·기타 보기·보기 부족·과도한 길이와 개수는 서버가 거절", async () => {
+  const bad = [
+    [{ title: " ", multiple: false, options: ["a", "b"] }],
+    [{ title: "예산", multiple: false, options: ["a", ""] }],
+    [{ title: "예산", multiple: false, options: ["한식", "한식 "] }],
+    [{ title: "예산", multiple: false, options: ["a", "b"] }, { title: "예산", multiple: true, options: ["c", "d"] }],
+    [{ title: "메뉴", multiple: false, options: ["한식", "기타"] }],
+    [{ title: "메뉴", multiple: false, options: ["한식"] }],
+    [{ title: "가".repeat(31), multiple: false, options: ["a", "b"] }],
+    [{ title: "메뉴", multiple: false, options: Array.from({ length: 11 }, (_, i) => `보기${i}`) }],
+    Array.from({ length: 11 }, (_, i) => ({ title: `질문${i}`, multiple: false, options: ["a", "b"] })),
+  ];
+  for (const questions of bad) assert.equal((await host.act(roomId, saveQuestions(activity, questions))).status, 400, JSON.stringify(questions).slice(0, 60));
+});
+
+await check("아이콘을 바꿔도 질문·보기·종류는 그대로", async () => {
+  const before = cardOf((await host.state(roomId)).data, lunch);
+  assert.equal((await host.act(roomId, { type: "setCardIcon", cardId: lunch, icon: "coffee" })).status, 200);
+  assert.equal((await host.act(roomId, { type: "setCardIcon", cardId: lunch, icon: "tent" })).status, 200);
+  const after = cardOf((await host.state(roomId)).data, lunch);
+  assert.equal(after.icon, "tent");
+  assert.equal(after.category, before.category);
+  assert.deepEqual(after.opinion.questions, before.opinion.questions);
+});
+
+await check("상태 API에 개별 조건·통과/충돌 평가가 없음", () => {
+  const raw = JSON.stringify(s);
+  assert.ok(!raw.includes('"conditions"'));
+  assert.ok(!raw.includes('"evaluations"'));
+});
+
+await check("응답 검증: 단일 선택 2개·빈 기타·빠진 질문은 거절", async () => {
+  const card = cardOf(s, lunch);
+  assert.equal((await alice.act(roomId, submitOpinion(card, { 예산: { labels: ["1만 원 이하", "2만 원 이하"] } }))).status, 400);
+  assert.equal((await alice.act(roomId, submitOpinion(card, { 예산: { labels: [], other: "   " } }))).status, 400);
+  const answers = answersFor(card, {});
+  delete answers[card.opinion.questions[1].id];
+  assert.equal((await alice.act(roomId, { type: "submitOpinion", cardId: lunch, answers })).status, 400);
+  assert.equal((await alice.state(roomId)).data.cards[0].opinion.submittedMemberIds.length, 0, "실패한 제출은 저장되지 않음");
+});
+
+await check("제출 전에는 집계를 받지 못하고, 후보 등록도 서버에서 거절", async () => {
+  const card = cardOf((await bob.state(roomId)).data, lunch);
+  assert.equal(card.opinion.results, null);
+  assert.equal(card.opinion.myAnswers, null);
+  const r = await bob.act(roomId, { type: "addCandidate", cardId: lunch, candidate: cand("먼저 올리기") });
+  assert.equal(r.status, 403);
+  assert.equal(r.data.code, "OPINION_REQUIRED");
+});
+
+await check("단일·복수 선택과 기타가 저장되고 새로고침 후에도 유지 (내 응답만 돌려받음)", async () => {
+  const card = cardOf(s, lunch);
+  const picks = { 예산: { labels: [], other: "1만 5천 원 정도면 좋겠어요" }, "피할 음식": { labels: ["날것", "해산물"], other: "고수" } };
+  assert.equal((await alice.act(roomId, submitOpinion(card, picks))).status, 200);
+  const again = cardOf((await alice.state(roomId)).data, lunch);
+  assert.deepEqual(again.opinion.myAnswers, answersFor(card, picks));
+});
+
+await check("제출자는 정확한 보기별 인원·기타 의견을 보고, 다른 사람의 응답·신원은 연결되지 않음", async () => {
+  const card = cardOf(s, lunch);
+  assert.equal((await host.act(roomId, submitOpinion(card, { 예산: { labels: ["2만 원 이하"] }, "피할 음식": { labels: ["날것", "매운 음식"] } }))).status, 200);
+  const view = (await host.state(roomId)).data;
+  const op = cardOf(view, lunch).opinion;
+  assert.equal(op.results.respondents, 2);
+  const [budget, avoid] = op.results.questions;
+  assert.deepEqual(budget.options.map((o) => o.count), [0, 1]);
+  assert.equal(budget.otherCount, 1);
+  assert.deepEqual(budget.otherTexts, ["1만 5천 원 정도면 좋겠어요"]);
+  assert.deepEqual(avoid.options.map((o) => o.count), [2, 1, 1]); // 복수 선택: 합(4) > 응답자(2)
+  assert.deepEqual(avoid.otherTexts, ["고수"]);
+  // 응답자 식별 정보는 제출 여부 목록에만 있고, 집계·내 응답에는 다른 사람의 것이 없다
+  const aliceId = view.members.find((m) => m.nickname === "앨리스").id;
+  assert.ok(!JSON.stringify(op.results).includes(aliceId));
+  assert.deepEqual(Object.keys(op), ["questions", "submittedMemberIds", "myAnswers", "results"]);
+  assert.ok(!JSON.stringify(op.myAnswers).includes("1만 5천"), "남의 기타 의견은 내 응답에 섞이지 않음");
+  assert.deepEqual([...op.submittedMemberIds].sort(), [aliceId, view.me.id].sort());
+  // 아직 제출하지 않은 밥은 여전히 집계를 받지 못한다
+  const bobRaw = JSON.stringify((await bob.state(roomId)).data);
+  assert.ok(!bobRaw.includes("1만 5천") && !bobRaw.includes("고수"));
+});
+
+await check("응답이 하나라도 있으면 질문 구조가 잠김", async () => {
+  const r = await host.act(roomId, saveQuestions(lunch, LUNCH_QUESTIONS));
+  assert.equal(r.status, 409);
+  assert.equal(r.data.code, "QUESTIONS_LOCKED");
+});
+
+await check("중복 클릭·재요청·응답 수정은 집계를 늘리지 않고 갱신", async () => {
+  const card = cardOf(s, lunch);
+  const same = submitOpinion(card, { 예산: { labels: ["1만 원 이하"] }, "피할 음식": { labels: ["해산물"] } });
+  const results = await Promise.all([1, 2, 3].map(() => bob.act(roomId, same)));
+  assert.ok(results.every((r) => r.status === 200));
+  let op = cardOf((await bob.state(roomId)).data, lunch).opinion;
+  assert.equal(op.results.respondents, 3);
+  assert.deepEqual(op.results.questions[0].options.map((o) => o.count), [1, 1]);
+  // 앨리스가 응답을 수정: 기타 → 1만 원 이하, 피할 음식 → 매운 음식만
+  assert.equal((await alice.act(roomId, submitOpinion(card, { 예산: { labels: ["1만 원 이하"] }, "피할 음식": { labels: ["매운 음식"] } }))).status, 200);
+  op = cardOf((await bob.state(roomId)).data, lunch).opinion;
+  assert.equal(op.results.respondents, 3);
+  assert.deepEqual(op.results.questions[0].options.map((o) => o.count), [2, 1]);
+  assert.equal(op.results.questions[0].otherCount, 0);
+  assert.deepEqual(op.results.questions[0].otherTexts, []);
+  assert.deepEqual(op.results.questions[1].options.map((o) => o.count), [1, 1, 2]);
+  assert.equal(cardOf((await host.state(roomId)).data, lunch).status, "reviewing"); // 전원 제출
+});
+
+await check("다른 일정에 낸 의견은 이 일정의 제출을 대신하지 않음", async () => {
+  const r = await alice.act(roomId, { type: "addCandidate", cardId: stay, candidate: cand("호텔") });
+  assert.equal(r.status, 403);
+  assert.equal(cardOf((await alice.state(roomId)).data, stay).opinion.results, null);
 });
 
 const addCand = async (client, cardId, c) => assert.equal((await client.act(roomId, { type: "addCandidate", cardId, candidate: c })).status, 200);
-await addCand(alice, lunch, cand("통과 A", { cost: 12000, tags: ["food", "rest"] }));
-await addCand(bob, lunch, cand("예산 초과 B", { cost: 18000 }));
-await addCand(bob, lunch, cand("해산물 C", { cost: 10000, features: ["해산물"] }));
-await addCand(host, lunch, cand("비용 모름 D", { cost: null, notes: { cost: "메뉴마다 달라요" } }));
-await addCand(host, lunch, cand("통과 E", { cost: 9000, tags: ["shopping"] }));
+await addCand(alice, lunch, cand("식당 A", { cost: 12000, tags: ["food", "rest"] }));
+await addCand(bob, lunch, cand("식당 B", { cost: 18000 }));
+await addCand(bob, lunch, cand("식당 C", { cost: 10000 }));
+await addCand(host, lunch, cand("식당 D", { cost: null, notes: { cost: "메뉴마다 달라요" } }));
+await addCand(host, lunch, cand("식당 E", { cost: 9000, tags: ["shopping"] }));
 
 s = (await host.state(roomId)).data;
 const byName = (card, name) => card.candidates.find((c) => c.name === name);
-const evalOf = (card, name) => card.evaluations.find((e) => e.candidateId === byName(card, name).id);
 const lunchCard = s.cards[0];
 
-await check("필수 조건 판정: 통과 / 예산 충돌 / 음식 충돌 / 확인 필요", () => {
-  assert.equal(evalOf(lunchCard, "통과 A").state, "pass");
-  assert.equal(evalOf(lunchCard, "예산 초과 B").state, "conflict");
-  assert.ok(evalOf(lunchCard, "예산 초과 B").reasons.some((r) => r.text === "예산 조건 1건과 충돌"));
-  assert.equal(evalOf(lunchCard, "해산물 C").state, "conflict");
-  assert.ok(evalOf(lunchCard, "해산물 C").reasons.some((r) => r.text === "제외 음식 조건과 충돌"));
-  assert.equal(evalOf(lunchCard, "비용 모름 D").state, "needs_check");
-  // 비용 '기타' 내용이 저장되고 확인 필요 이유에 나타남
-  assert.equal(byName(lunchCard, "비용 모름 D").notes.cost, "메뉴마다 달라요");
-  assert.ok(evalOf(lunchCard, "비용 모름 D").needsCheck.some((t) => t.includes("메뉴마다 달라요")));
-});
-
-await check("취향 점수와 추천 이유", () => {
-  const a = evalOf(lunchCard, "통과 A");
-  // 방장 rest(3)+food(2)=5, 앨리스 food 3, 밥 food(2)+rest(1)=3 → 11
-  assert.equal(a.tasteScore, 11);
-  assert.ok(a.reasons.some((r) => r.text === "3명 중 3명의 선호 취향과 일치"));
-  assert.ok(a.reasons.some((r) => r.text === "전원 예산 조건 충족"));
-  assert.equal(a.recommended, true);
-  assert.equal(lunchCard.evaluations[0].candidateId, byName(lunchCard, "통과 A").id);
+await check("제출자는 후보를 일정에 등록 (비용 ‘기타’ 내용 저장)", () => {
+  assert.equal(lunchCard.candidates.length, 5);
+  assert.equal(byName(lunchCard, "식당 D").notes.cost, "메뉴마다 달라요");
 });
 
 await check("다른 사람의 후보는 수정 불가 (방장은 가능)", async () => {
-  const id = byName(lunchCard, "예산 초과 B").id;
+  const id = byName(lunchCard, "식당 B").id;
   assert.equal((await alice.act(roomId, { type: "deleteCandidate", candidateId: id })).status, 403);
-  assert.equal((await host.act(roomId, { type: "updateCandidate", candidateId: id, candidate: cand("예산 초과 B", { cost: 19000 }) })).status, 200);
+  assert.equal((await host.act(roomId, { type: "updateCandidate", candidateId: id, candidate: cand("식당 B", { cost: 19000 }) })).status, 200);
 });
 
 // ── 다수결 ──
-const A = byName(lunchCard, "통과 A").id;
-const E = byName(lunchCard, "통과 E").id;
-const B = byName(lunchCard, "예산 초과 B").id;
-const C = byName(lunchCard, "해산물 C").id;
-const D = byName(lunchCard, "비용 모름 D").id;
+const A = byName(lunchCard, "식당 A").id;
+const E = byName(lunchCard, "식당 E").id;
+const B = byName(lunchCard, "식당 B").id;
+const C = byName(lunchCard, "식당 C").id;
+const D = byName(lunchCard, "식당 D").id;
 
 await check("방장만 결정 시작, 모든 후보를 빼면 시작 불가", async () => {
   assert.equal((await alice.act(roomId, { type: "startDecision", cardId: lunch, mode: "vote" })).status, 403);
@@ -255,15 +407,14 @@ await check("방장만 결정 시작, 모든 후보를 빼면 시작 불가", as
   assert.equal(none.data.code, "NO_ELIGIBLE");
 });
 
-await check("조건 충돌·확인 필요 후보도 자동으로 빠지지 않고, 방장이 고른 후보만 제외", async () => {
-  // 방장은 확인 필요 D만 빼고, 조건 충돌 B·C는 포함하기로 선택
+await check("등록된 후보가 모두 결정 대상이고, 방장이 뺀 후보만 제외", async () => {
   assert.equal((await host.act(roomId, { type: "startDecision", cardId: lunch, mode: "vote", excludeIds: [D] })).status, 200);
   s = (await host.state(roomId)).data;
   assert.deepEqual([...s.cards[0].pool].sort(), [A, B, C, E].sort());
 });
 
-await check("결정 중에는 후보·조건 수정 잠금", async () => {
-  assert.equal((await bob.act(roomId, cond(lunch, { maxBudget: 1000 }))).status, 409);
+await check("결정 중에는 후보·의견 수정 잠금", async () => {
+  assert.equal((await bob.act(roomId, submitOpinion(cardOf(s, lunch), { 예산: { labels: ["2만 원 이하"] } }))).status, 409);
   assert.equal((await bob.act(roomId, { type: "addCandidate", cardId: lunch, candidate: cand("늦은 후보") })).status, 409);
 });
 
@@ -295,7 +446,7 @@ await check("전원 투표 시 자동 마감 → 최다 득표 결과 공개", a
   s = (await host.state(roomId)).data;
   const c = s.cards[0];
   assert.equal(c.phase, "result");
-  assert.equal(c.result.candidate.name, "통과 A");
+  assert.equal(c.result.candidate.name, "식당 A");
   assert.equal(c.result.detail.kind, "vote");
   assert.deepEqual(c.voting.counts.map((x) => x.votes), [2, 1, 0, 0]);
 });
@@ -311,7 +462,13 @@ await check("확정은 방장만, 한 번만", async () => {
 });
 
 // ── 동점 → 룰렛 ──
-for (const c of [host, alice, bob]) await c.act(roomId, cond(dinner));
+const SIMPLE_QUESTIONS = [{ title: "분위기", multiple: false, options: ["조용한 곳", "활기찬 곳"] }];
+async function openOpinion(cardId) {
+  assert.equal((await host.act(roomId, saveQuestions(cardId, SIMPLE_QUESTIONS))).status, 200);
+  const card = cardOf((await host.state(roomId)).data, cardId);
+  for (const c of [host, alice, bob]) assert.equal((await c.act(roomId, submitOpinion(card))).status, 200);
+}
+await openOpinion(dinner);
 await addCand(host, dinner, cand("저녁 X", { tags: ["food"] }));
 await addCand(alice, dinner, cand("저녁 Y", { tags: ["photo"] }));
 s = (await host.state(roomId)).data;
@@ -339,10 +496,10 @@ await check("동점이면 동점 후보만 룰렛으로", async () => {
 });
 
 // ── 결정권 쟁탈전 ──
-for (const c of [host, alice, bob]) await c.act(roomId, cond(activity, { restrictions: c === bob ? ["음주"] : [] }));
-await addCand(alice, activity, cand("바다 산책", { cost: 0, tags: ["nature", "photo"], features: [] }));
-await addCand(alice, activity, cand("보드게임 카페", { cost: 8000, tags: ["rest", "experience"], features: [] }));
-await addCand(bob, activity, cand("야간 포차", { tags: ["food"], features: ["음주"] }));
+await openOpinion(activity);
+await addCand(alice, activity, cand("바다 산책", { cost: 0, tags: ["nature", "photo"] }));
+await addCand(alice, activity, cand("보드게임 카페", { cost: 8000, tags: ["rest", "experience"] }));
+await addCand(bob, activity, cand("야간 포차", { tags: ["food"] }));
 s = (await host.state(roomId)).data;
 const sea = byName(s.cards[1], "바다 산책").id;
 const pub = byName(s.cards[1], "야간 포차").id;
@@ -393,7 +550,7 @@ await check("쟁탈전: 준비 → 카운트다운 중 입력 무시 → 연타 
   assert.equal(card.battleWinnerId, s.members.find((m) => m.nickname === "앨리스").id);
 });
 
-await check("우승자만 고를 수 있고, 결정 대상 밖 후보는 우승자도 선택 불가 (충돌 후보는 대상)", async () => {
+await check("우승자만 고를 수 있고, 결정 대상 밖 후보는 우승자도 선택 불가", async () => {
   assert.equal((await bob.act(roomId, { type: "battlePick", cardId: activity, candidateId: sea })).status, 403);
   assert.equal((await alice.act(roomId, { type: "battlePick", cardId: activity, candidateId: X })).status, 400); // 다른 카드의 후보
   assert.ok(s.cards[1].pool.includes(pub));
@@ -422,11 +579,12 @@ await check("카드 일정(일차·시간): 방장만 수정, 형식 검사, 상
   assert.equal((await bob.state(roomId)).data.cards[3].time, null);
 });
 
-await check("방장 잠금 → 수정 차단, 해제 후 가능", async () => {
+await check("방장 잠금 → 의견 제출 차단, 해제 후 가능", async () => {
+  const stayCard = cardOf((await bob.state(roomId)).data, stay);
   await host.act(roomId, { type: "setLock", cardId: stay, locked: true });
-  assert.equal((await bob.act(roomId, cond(stay))).status, 409);
+  assert.equal((await bob.act(roomId, submitOpinion(stayCard))).status, 409);
   await host.act(roomId, { type: "setLock", cardId: stay, locked: false });
-  assert.equal((await bob.act(roomId, cond(stay))).status, 200);
+  assert.equal((await bob.act(roomId, submitOpinion(stayCard))).status, 200);
 });
 
 await check("확정된 카드 다시 진행 → 라운드 증가, 결과 초기화", async () => {
@@ -516,7 +674,9 @@ await check("내보내기: 결정 중에는 불가, 내보낸 참가자는 모�
   assert.ok(!(await bob.req("/api/auth/me")).data.rooms.some((x) => x.id === roomId));
   s = (await alice.state(roomId)).data;
   assert.ok(!s.members.some((m) => m.nickname === "밥"));
-  assert.ok(s.cards[0].candidates.some((c) => c.name === "예산 초과 B"), "내보낸 사람이 올린 후보는 남음");
+  assert.ok(s.cards[0].candidates.some((c) => c.name === "식당 B"), "내보낸 사람이 올린 후보는 남음");
+  assert.ok(!s.cards[0].opinion.submittedMemberIds.includes(bobId), "내보낸 사람의 의견은 집계에서 빠짐");
+  assert.equal(s.cards[0].opinion.results.respondents, 2);
 });
 
 // ── 구슬 레이스 ── (별도 모임: 방장=host, 참가자=carol)
@@ -524,7 +684,9 @@ const mr = (await host.req("/api/rooms", { name: "구슬 모임", tripStart: "20
 await carol.req(`/api/invite/${mr.inviteCode}/join`, profile("캐롤"));
 let ms = (await host.state(mr.roomId)).data;
 const mCard = ms.cards[0].id;
-for (const name of ["국밥집", "분식집", "돈가스"]) await host.act(mr.roomId, { type: "addCandidate", cardId: mCard, candidate: cand(name) });
+await host.act(mr.roomId, saveQuestions(mCard, SIMPLE_QUESTIONS));
+await host.act(mr.roomId, submitOpinion(cardOf((await host.state(mr.roomId)).data, mCard)));
+for (const name of ["국밥집", "분식집", "돈가스"]) assert.equal((await host.act(mr.roomId, { type: "addCandidate", cardId: mCard, candidate: cand(name) })).status, 200);
 
 await check("구슬 레이스: 방장만 출발, 재생 중엔 결과를 숨기고 같은 기록을 받음", async () => {
   assert.equal((await host.act(mr.roomId, { type: "startDecision", cardId: mCard, mode: "marble" })).status, 200);
@@ -555,6 +717,34 @@ await check("구슬 레이스: 재생이 끝나면 결과 공개, 늦게 들어�
   assert.equal(done.result.detail.order.length, 3);
   assert.equal(done.result.candidate.id, done.result.detail.order[0].candidateId);
   assert.equal((await host.act(mr.roomId, { type: "confirmResult", cardId: mCard })).status, 200);
+});
+
+// ── 데모 모임 ──
+await check("데모: 가상 참가자는 의견을 미리 제출, 방장은 직접 제출해야 집계·후보 등록 가능", async () => {
+  const demo = await carol.req("/api/demo", profile("데모방장"));
+  assert.equal(demo.status, 200);
+  let dv = (await carol.state(demo.data.roomId)).data;
+  assert.equal(dv.members.length, 4);
+  const bots = dv.members.filter((m) => m.isBot).map((m) => m.id);
+  assert.equal(bots.length, 3);
+  for (const card of dv.cards) {
+    assert.ok(card.opinion.questions.length > 0);
+    assert.deepEqual([...card.opinion.submittedMemberIds].sort(), [...bots].sort());
+    assert.equal(card.opinion.results, null);
+  }
+  assert.ok(dv.cards[0].candidates.length > 0, "가상 참가자가 올린 후보가 있음");
+  const lunchDemo = dv.cards[0];
+  assert.equal((await carol.act(demo.data.roomId, { type: "addCandidate", cardId: lunchDemo.id, candidate: cand("데모 후보") })).status, 403);
+  assert.equal((await carol.act(demo.data.roomId, submitOpinion(lunchDemo))).status, 200);
+  dv = (await carol.state(demo.data.roomId)).data;
+  const results = dv.cards[0].opinion.results;
+  assert.equal(results.respondents, 4);
+  for (const botId of bots) assert.ok(!JSON.stringify(results).includes(botId));
+  assert.equal((await carol.act(demo.data.roomId, { type: "addCandidate", cardId: lunchDemo.id, candidate: cand("데모 후보") })).status, 200);
+  assert.equal((await carol.act(demo.data.roomId, { type: "startDecision", cardId: lunchDemo.id, mode: "roulette" })).status, 200);
+  assert.equal((await carol.act(demo.data.roomId, { type: "spinRoulette", cardId: lunchDemo.id })).status, 200);
+  assert.equal((await carol.act(demo.data.roomId, { type: "confirmResult", cardId: lunchDemo.id })).status, 200);
+  assert.equal((await carol.state(demo.data.roomId)).data.cards[0].stage, "confirmed");
 });
 
 console.log(`\n${passed}개 검증 통과 (room ${roomId})`);

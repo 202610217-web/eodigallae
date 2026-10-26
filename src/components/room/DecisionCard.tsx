@@ -32,7 +32,7 @@ import { createElement, useId, type CSSProperties } from "react";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { cn } from "@/lib/client/cn";
 import { formatCost, formatSchedule } from "@/lib/client/format";
-import { cardReadyCount, myCondition } from "@/lib/client/selectors";
+import { cardSubmittedCount, hasSubmittedOpinion } from "@/lib/client/selectors";
 import { guessCardIcon, isCardIconKey, modeLabel, type CardCategory, type CardIconKey } from "@/lib/domain/constants";
 import type { DecisionCardView } from "@/lib/domain/types";
 import { useRoom } from "./RoomProvider";
@@ -119,26 +119,28 @@ export function phaseText(card: DecisionCardView): string | null {
 }
 
 /** 카드 아래 한 줄 안내. action: 지금 내가 하거나 같이 볼 일이라 강조한다 */
-function nextStep(card: DecisionCardView, myReady: boolean): { text: string; action: boolean } {
+function nextStep(card: DecisionCardView, submitted: boolean, isHost: boolean): { text: string; action: boolean } {
   const phase = phaseText(card);
   if (phase) return { text: phase, action: true };
-  if (card.stage === "open" && !myReady) {
-    return card.locked ? { text: "방장이 잠근 카드예요", action: false } : { text: "내 조건을 입력해주세요", action: true };
+  if (card.stage === "open" && !submitted) {
+    if (card.locked) return { text: "방장이 잠근 카드예요", action: false };
+    if (card.opinion.questions.length === 0) {
+      return isHost ? { text: "의견 투표 질문을 만들어주세요", action: true } : { text: "방장이 의견 투표 질문을 준비 중이에요", action: false };
+    }
+    return { text: "의견을 제출해주세요", action: true };
   }
-  if (card.candidates.length === 0) return { text: "첫 번째 후보를 등록해주세요", action: false };
-  return { text: "후보를 비교하고 결정 방식을 골라요", action: false };
+  if (card.candidates.length === 0) return { text: "의견 집계를 보고 첫 번째 후보를 등록해주세요", action: false };
+  return { text: "후보를 보고 결정 방식을 골라요", action: false };
 }
 
 export function DecisionCard({ card, index, onOpen }: { card: DecisionCardView; index: number; onOpen: () => void }) {
   const { view, justConfirmed } = useRoom();
   const statusId = useId();
-  const ready = cardReadyCount(card);
+  const ready = cardSubmittedCount(card);
   const total = view.members.length;
-  const mine = myCondition(card, view.me.id);
-  const passCount = card.evaluations.filter((e) => e.state === "pass").length;
   const confirmed = card.stage === "confirmed" && card.result;
   const schedule = formatSchedule(card.day, card.time);
-  const step = nextStep(card, Boolean(mine?.ready));
+  const step = nextStep(card, hasSubmittedOpinion(card, view.me.id), view.me.isHost);
 
   // 카드 전체가 눌리지만, 제목·정보가 버튼 안에 묻히지 않도록 제목 버튼의 ::after를 카드 크기로 펼친다
   return (
@@ -189,18 +191,12 @@ export function DecisionCard({ card, index, onOpen }: { card: DecisionCardView; 
           <dl className="mt-4 grid grid-cols-2 gap-2 text-sm">
             <div className="rounded-xl bg-cream px-3 py-2">
               <dt className="text-xs text-ink-soft">후보</dt>
-              <dd className="font-bold tabular-nums">
-                {card.candidates.length}개
-                {/* 조건이 다 모이기 전에는 모든 후보가 '확인 필요'라 통과 수가 의미 없다 */}
-                {card.candidates.length > 0 && ready === total && (
-                  <span className="font-medium text-ink-soft"> · 통과 {passCount}</span>
-                )}
-              </dd>
+              <dd className="font-bold tabular-nums">{card.candidates.length}개</dd>
             </div>
             <div className="rounded-xl bg-cream px-3 py-2">
-              <dt className="text-xs text-ink-soft">조건 입력</dt>
+              <dt className="text-xs text-ink-soft">의견 투표</dt>
               <dd className="font-bold tabular-nums">
-                {ready}/{total}명 준비 완료
+                {ready}/{total}명 제출
               </dd>
               <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-cream-deep" aria-hidden>
                 <div className="h-full rounded-full bg-coral transition-[width] duration-500" style={{ width: `${total ? (ready / total) * 100 : 0}%` }} />

@@ -47,8 +47,9 @@ export function colorHex(key: ColorKey): string {
   return COLORS.find((c) => c.key === key)?.hex ?? COLORS[0].hex;
 }
 
-// 결정 카드 종류. 종류마다 필수 제외 조건 목록이 다르다.
+// 결정 카드 종류. 확정 일정표에서 숙소를 따로 모아 보여줄 때 쓴다. 아이콘·의견 투표 질문과는 관계없다.
 export type CardCategory = "meal" | "activity" | "stay";
+export const CARD_CATEGORIES: CardCategory[] = ["meal", "activity", "stay"];
 
 /** 카드 제목의 시간대 단어로 시작 시각을 추측한다 (모임 만들 때 기본값). 없으면 null */
 export function guessCardTime(title: string): string | null {
@@ -75,8 +76,8 @@ export const CARD_PRESETS: { key: string; title: string; category: CardCategory;
 ];
 
 /**
- * 결정 카드 아이콘 목록. 방장이 고른 아이콘의 종류가 곧 카드 종류(식사·활동·숙소)가 된다.
- * 종류는 조건 입력 항목(못 먹는 음식/참여 불가/숙소 제외)과 일정표(숙소는 따로)에 쓰인다.
+ * 결정 카드 아이콘 목록 (장식용). category는 아이콘 고르는 화면의 묶음과,
+ * 방장이 종류를 따로 고르기 전에 미리 골라 둘 기본값으로만 쓴다.
  */
 export const CARD_ICONS = {
   utensils: { category: "meal", label: "식사" },
@@ -164,20 +165,6 @@ export const RESTRICTIONS: Record<
   },
 };
 
-export const SETTINGS = [
-  { key: "indoor", label: "실내" },
-  { key: "outdoor", label: "야외" },
-  { key: "any", label: "상관없음" },
-] as const;
-export type SettingKey = (typeof SETTINGS)[number]["key"];
-
-export const VIBES = [
-  { key: "quiet", label: "조용한 곳" },
-  { key: "lively", label: "활기찬 곳" },
-  { key: "any", label: "상관없음" },
-] as const;
-export type VibeKey = (typeof VIBES)[number]["key"];
-
 export const DECISION_MODES = [
   { key: "vote", label: "다수결" },
   { key: "roulette", label: "운명의 룰렛" },
@@ -205,10 +192,15 @@ export const LIMITS = {
   nickname: 12,
   candidateName: 40,
   description: 200,
-  wish: 60,
-  note: 200,
   link: 500,
   maxBudget: 10_000_000,
   maxMembers: 12,
   maxCandidates: 20,
+  // 의견 투표
+  questionTitle: 30,
+  optionLabel: 30,
+  maxQuestions: 10,
+  minOptions: 2,
+  maxOptions: 10,
+  otherText: 100,
 };

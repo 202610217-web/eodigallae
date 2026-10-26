@@ -1,12 +1,4 @@
-import type {
-  CardCategory,
-  CharacterKey,
-  ColorKey,
-  DecisionMode,
-  SettingKey,
-  TasteKey,
-  VibeKey,
-} from "./constants";
+import type { CardCategory, CharacterKey, ColorKey, DecisionMode, TasteKey } from "./constants";
 
 export type TasteRanks = [TasteKey, TasteKey, TasteKey];
 
@@ -22,18 +14,53 @@ export interface Member {
   taste: TasteRanks | null;
 }
 
-export interface MemberCondition {
-  memberId: string;
-  cardId: string;
-  /** null = 예산 제한 없음 */
-  maxBudget: number | null;
-  restrictions: string[];
-  setting: SettingKey;
-  vibe: VibeKey;
-  wish: string;
-  note: string;
-  ready: boolean;
-  updatedAt: number;
+// ───── 의견 투표 ─────
+// 방장이 일정마다 질문과 보기를 직접 만든다. '기타'(직접 입력)는 보기 목록에 넣지 않고 모든 질문에 기본으로 붙는다.
+
+export interface OpinionOption {
+  id: string;
+  label: string;
+}
+
+export interface OpinionQuestion {
+  id: string;
+  title: string;
+  /** true = 복수 선택, false = 하나만 */
+  multiple: boolean;
+  options: OpinionOption[];
+}
+
+export interface OpinionAnswer {
+  optionIds: string[];
+  /** 기타를 골랐을 때 적은 내용. 기타를 고르지 않았으면 null */
+  other: string | null;
+}
+
+/** 질문 id → 답 */
+export type OpinionAnswers = Record<string, OpinionAnswer>;
+
+export interface OpinionQuestionResult {
+  questionId: string;
+  /** 보기별 선택 인원 (복수 선택이면 합이 응답자 수보다 클 수 있다) */
+  options: { optionId: string; count: number }[];
+  otherCount: number;
+  /** 기타 의견 원문. 누가 적었는지 알 수 없게 글자 순으로 정렬한다 */
+  otherTexts: string[];
+}
+
+export interface OpinionResults {
+  respondents: number;
+  questions: OpinionQuestionResult[];
+}
+
+export interface OpinionView {
+  questions: OpinionQuestion[];
+  /** 의견을 제출한 참가자 (제출 여부만, 무엇을 골랐는지는 담지 않는다) */
+  submittedMemberIds: string[];
+  /** 내가 제출한 응답 (확인·수정용). 제출 전이면 null */
+  myAnswers: OpinionAnswers | null;
+  /** 익명 집계. 내가 제출하기 전에는 서버가 보내지 않는다 */
+  results: OpinionResults | null;
 }
 
 // "unknown" = 고르지 않음, "other" = 기타(내용은 notes에)
@@ -66,7 +93,7 @@ export interface CandidateNotes {
   vibe?: string;
 }
 
-/** DB에 저장되는 카드 단계. 화면 상태(조건 수집 중/후보 확인)는 여기서 파생한다. */
+/** DB에 저장되는 카드 단계. 화면 상태(의견 수집 중/후보 확인)는 여기서 파생한다. */
 export type CardStage = "open" | "deciding" | "confirmed";
 
 export type CardPhase =
@@ -130,22 +157,6 @@ export interface DecisionResult {
   confirmedAt: number | null;
 }
 
-export type CheckState = "pass" | "conflict" | "needs_check";
-
-export interface CandidateEvaluation {
-  candidateId: string;
-  state: CheckState;
-  conflicts: string[];
-  needsCheck: string[];
-  /** 사람이 읽는 추천/주의 이유 (점수보다 먼저 보여준다) */
-  reasons: { tone: "good" | "warn" | "bad" | "info"; text: string }[];
-  tasteScore: number;
-  matchedMembers: number;
-  tasteMembers: number;
-  recommended: boolean;
-  rank: number;
-}
-
 export interface VotingView {
   votedCount: number;
   eligibleVoters: number;
@@ -165,7 +176,7 @@ export interface DecisionCardView {
   id: string;
   title: string;
   category: CardCategory;
-  /** 방장이 고른 아이콘 키 (CARD_ICONS). 이전 카드는 null → 제목으로 추측 */
+  /** 방장이 고른 아이콘 키 (CARD_ICONS, 장식용). 이전 카드는 null → 제목으로 추측 */
   icon: string | null;
   sortOrder: number;
   /** 몇 일차 (1부터), 정하지 않았으면 null */
@@ -184,9 +195,8 @@ export interface DecisionCardView {
   marble: { startsAt: number; endsAt: number } | null;
   phaseStartedAt: number | null;
   battleWinnerId: string | null;
-  conditions: MemberCondition[];
+  opinion: OpinionView;
   candidates: Candidate[];
-  evaluations: CandidateEvaluation[];
   voting: VotingView | null;
   battle: BattleEntryView[];
   result: DecisionResult | null;

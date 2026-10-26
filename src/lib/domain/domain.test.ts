@@ -8,205 +8,148 @@ import {
   segmentAtPointer,
   tallyVotes,
 } from "./decide";
-import {
-  cardDisplayStatus,
-  decisionPool,
-  evaluateCandidate,
-  evaluateCandidates,
-  memberTasteScore,
-} from "./evaluate";
+import { cardDisplayStatus, decisionPool } from "./evaluate";
 import { marblePositions, simulateMarbleRace } from "./marble";
-import type { Candidate, Member, MemberCondition } from "./types";
+import { aggregateOpinions, normalizeAnswers, normalizeQuestions } from "./opinion";
+import type { OpinionAnswers, OpinionQuestion } from "./types";
 
-const members: Pick<Member, "id" | "nickname" | "taste">[] = [
-  { id: "a", nickname: "민지", taste: ["food", "photo", "nature"] },
-  { id: "b", nickname: "준호", taste: ["rest", "food", "shopping"] },
-  { id: "c", nickname: "서연", taste: ["nature", "photo", "culture"] },
-];
+const members = [{ id: "a" }, { id: "b" }, { id: "c" }];
 
-function cond(memberId: string, patch: Partial<MemberCondition> = {}): MemberCondition {
-  return {
-    memberId,
-    cardId: "card",
-    maxBudget: null,
-    restrictions: [],
-    setting: "any",
-    vibe: "any",
-    wish: "",
-    note: "",
-    ready: true,
-    updatedAt: 0,
-    ...patch,
-  };
+// 테스트용 id: q1, q2 … / o1, o2 …
+function idMaker() {
+  const n: Record<string, number> = {};
+  return (prefix: string) => `${prefix}${(n[prefix] = (n[prefix] ?? 0) + 1)}`;
 }
 
-function cand(id: string, patch: Partial<Candidate> = {}): Candidate {
-  return {
-    id,
-    cardId: "card",
-    createdBy: "a",
-    name: id,
-    cost: 10000,
-    tags: [],
-    features: [],
-    notes: {},
-    setting: "unknown",
-    vibe: "unknown",
-    link: "",
-    description: "",
-    createdAt: 0,
-    ...patch,
-  };
+function questions(): OpinionQuestion[] {
+  const r = normalizeQuestions(
+    [
+      { title: "예산", multiple: false, options: ["1만 원 이하", "2만 원 이하"] },
+      { title: "피할 음식", multiple: true, options: ["날것", "해산물", "매운 음식"] },
+    ],
+    idMaker(),
+  );
+  if (!r.ok) throw new Error(r.error);
+  return r.value;
 }
 
-const allConds = members.map((m) => cond(m.id));
-
-describe("취향 점수", () => {
-  it("1·2·3순위 일치에 3·2·1점을 준다", () => {
-    expect(memberTasteScore(["food", "photo", "nature"], ["food"])).toBe(3);
-    expect(memberTasteScore(["food", "photo", "nature"], ["photo", "nature"])).toBe(3);
-    expect(memberTasteScore(["food", "photo", "nature"], ["shopping"])).toBe(0);
-    expect(memberTasteScore(null, ["food"])).toBe(0);
+describe("의견 투표 질문 만들기", () => {
+  it("방장이 적은 질문·보기를 그대로 쓰고 앞뒤 공백만 정리한다", () => {
+    const r = normalizeQuestions([{ title: "  침대 개수 ", multiple: false, options: [" 1개", "2개 "] }], idMaker());
+    expect(r).toEqual({
+      ok: true,
+      value: [{ id: "q1", title: "침대 개수", multiple: false, options: [{ id: "o1", label: "1개" }, { id: "o2", label: "2개" }] }],
+    });
   });
 
-  it("참가자 점수를 합산하고 일치 인원을 센다", () => {
-    const e = evaluateCandidate(cand("x", { tags: ["food", "shopping"] }), {
-      category: "meal",
-      members,
-      conditions: allConds,
-    });
-    // 민지 3, 준호 2+1, 서연 0
-    expect(e.tasteScore).toBe(6);
-    expect(e.matchedMembers).toBe(2);
-    expect(e.reasons.map((r) => r.text)).toContain("3명 중 2명의 선호 취향과 일치");
+  it("빈 이름·빈 보기·보기 부족·중복·‘기타’ 보기·과도한 길이와 개수를 거절한다", () => {
+    const bad = (q: { title: string; multiple?: boolean; options: string[] }[]) =>
+      normalizeQuestions(q.map((x) => ({ multiple: false, ...x })), idMaker()).ok;
+    expect(bad([{ title: " ", options: ["a", "b"] }])).toBe(false);
+    expect(bad([{ title: "예산", options: ["a", " "] }])).toBe(false);
+    expect(bad([{ title: "예산", options: ["a"] }])).toBe(false);
+    expect(bad([{ title: "예산", options: ["한식", " 한식 "] }])).toBe(false);
+    expect(bad([{ title: "예산", options: ["a", "b"] }, { title: "예산 ", options: ["c", "d"] }])).toBe(false);
+    expect(bad([{ title: "메뉴", options: ["한식", "기타"] }])).toBe(false);
+    expect(bad([{ title: "가".repeat(31), options: ["a", "b"] }])).toBe(false);
+    expect(bad([{ title: "메뉴", options: ["a", "나".repeat(31)] }])).toBe(false);
+    expect(bad([{ title: "메뉴", options: Array.from({ length: 11 }, (_, i) => `보기 ${i}`) }])).toBe(false);
+    expect(bad(Array.from({ length: 11 }, (_, i) => ({ title: `질문 ${i}`, options: ["a", "b"] })))).toBe(false);
+    expect(bad([])).toBe(true);
   });
 });
 
-describe("필수 조건 검사", () => {
-  it("예산 초과는 충돌로 판정하고 이유를 남긴다", () => {
-    const conditions = [cond("a", { maxBudget: 20000 }), cond("b", { maxBudget: 5000 }), cond("c", { maxBudget: 8000 })];
-    const e = evaluateCandidate(cand("x", { cost: 10000 }), { category: "meal", members, conditions });
-    expect(e.state).toBe("conflict");
-    expect(e.conflicts).toHaveLength(2);
-    expect(e.reasons[0].text).toBe("예산 조건 2건과 충돌");
+describe("의견 제출 검사", () => {
+  const qs = questions();
+  const [budget, avoid] = qs;
+  const ans = (patch: OpinionAnswers = {}): OpinionAnswers => ({
+    [budget.id]: { optionIds: [budget.options[0].id], other: null },
+    [avoid.id]: { optionIds: [avoid.options[0].id], other: null },
+    ...patch,
   });
 
-  it("예산과 같은 금액은 통과한다", () => {
-    const conditions = members.map((m) => cond(m.id, { maxBudget: 10000 }));
-    const e = evaluateCandidate(cand("x", { cost: 10000 }), { category: "meal", members, conditions });
-    expect(e.state).toBe("pass");
-    expect(e.reasons.map((r) => r.text)).toContain("전원 예산 조건 충족");
+  it("모든 질문에 답해야 한다", () => {
+    const partial = Object.fromEntries(Object.entries(ans()).filter(([id]) => id !== avoid.id));
+    expect(normalizeAnswers(qs, partial)).toMatchObject({ ok: false });
   });
 
-  it("제외 음식과 겹치면 충돌", () => {
-    const conditions = [cond("a", { restrictions: ["해산물"] }), cond("b"), cond("c")];
-    const e = evaluateCandidate(cand("x", { features: ["해산물", "매운 음식"] }), {
-      category: "meal",
-      members,
-      conditions,
-    });
-    expect(e.state).toBe("conflict");
-    expect(e.reasons.map((r) => r.text)).toContain("제외 음식 조건과 충돌");
+  it("단일 선택은 보기·기타 중 하나만, 복수 선택은 보기 여러 개와 기타를 함께 고를 수 있다", () => {
+    expect(normalizeAnswers(qs, ans({ [budget.id]: { optionIds: [budget.options[0].id, budget.options[1].id], other: null } })).ok).toBe(false);
+    expect(normalizeAnswers(qs, ans({ [budget.id]: { optionIds: [budget.options[0].id], other: "1만 5천 원" } })).ok).toBe(false);
+    expect(normalizeAnswers(qs, ans({ [budget.id]: { optionIds: [], other: "1만 5천 원" } })).ok).toBe(true);
+    const multi = normalizeAnswers(qs, ans({ [avoid.id]: { optionIds: avoid.options.map((o) => o.id), other: "고수" } }));
+    expect(multi.ok && multi.value[avoid.id]).toEqual({ optionIds: avoid.options.map((o) => o.id), other: "고수" });
   });
 
-  it("비용 정보가 없으면 적합으로 보지 않고 확인 필요", () => {
-    const conditions = [cond("a", { maxBudget: 10000 }), cond("b"), cond("c")];
-    const e = evaluateCandidate(cand("x", { cost: null }), { category: "meal", members, conditions });
-    expect(e.state).toBe("needs_check");
+  it("아무것도 고르지 않거나 기타 내용이 비면 거절한다", () => {
+    expect(normalizeAnswers(qs, ans({ [avoid.id]: { optionIds: [], other: null } })).ok).toBe(false);
+    expect(normalizeAnswers(qs, ans({ [avoid.id]: { optionIds: [], other: "   " } })).ok).toBe(false);
   });
 
-  it("후보 특징 정보가 없고 누군가 제외 조건이 있으면 확인 필요", () => {
-    const conditions = [cond("a", { restrictions: ["음주"] }), cond("b"), cond("c")];
-    const e = evaluateCandidate(cand("x", { features: null }), { category: "activity", members, conditions });
-    expect(e.state).toBe("needs_check");
+  it("같은 보기를 여러 번 보내도 한 번으로 정리하고, 없는 보기·질문은 거절한다", () => {
+    const dup = normalizeAnswers(qs, ans({ [avoid.id]: { optionIds: [avoid.options[1].id, avoid.options[1].id, avoid.options[0].id], other: null } }));
+    expect(dup.ok && dup.value[avoid.id].optionIds).toEqual([avoid.options[0].id, avoid.options[1].id]);
+    expect(normalizeAnswers(qs, ans({ [avoid.id]: { optionIds: ["o999"], other: null } })).ok).toBe(false);
+    expect(normalizeAnswers(qs, ans({ q999: { optionIds: [], other: "x" } })).ok).toBe(false);
   });
 
-  it("아무도 제한이 없으면 비용·특징 정보가 없어도 통과", () => {
-    const e = evaluateCandidate(cand("x", { cost: null, features: null }), {
-      category: "activity",
-      members,
-      conditions: allConds,
-    });
-    expect(e.state).toBe("pass");
-  });
-
-  it("조건을 입력하지 않은 참가자가 있으면 확인 필요", () => {
-    const e = evaluateCandidate(cand("x"), { category: "meal", members, conditions: [cond("a")] });
-    expect(e.state).toBe("needs_check");
-    expect(e.needsCheck[0]).toContain("2명");
-  });
-
-  it("충돌은 확인 필요보다 우선한다", () => {
-    const conditions = [cond("a", { maxBudget: 1000 })];
-    const e = evaluateCandidate(cand("x"), { category: "meal", members, conditions });
-    expect(e.state).toBe("conflict");
-  });
-
-  it("선호 조건은 후보를 차단하지 않는다", () => {
-    const conditions = members.map((m) => cond(m.id, { setting: "indoor", vibe: "quiet" }));
-    const e = evaluateCandidate(cand("x", { setting: "outdoor", vibe: "lively" }), {
-      category: "activity",
-      members,
-      conditions,
-    });
-    expect(e.state).toBe("pass");
-    expect(e.tasteScore).toBe(0);
+  it("질문이 없으면 제출할 수 없다", () => {
+    expect(normalizeAnswers([], {}).ok).toBe(false);
   });
 });
 
-describe("후보 순위와 결정 대상", () => {
-  it("통과 > 확인 필요 > 충돌 순이고, 문제 있는 후보도 자동으로 빠지지 않음 (방장이 고른 것만 제외)", () => {
-    const conditions = [cond("a", { maxBudget: 15000 }), cond("b"), cond("c")];
-    const evals = evaluateCandidates({
-      category: "meal",
-      members,
-      conditions,
-      candidates: [
-        cand("over", { cost: 30000, tags: ["food"] }),
-        cand("unknown", { cost: null, tags: ["food"] }),
-        cand("low", { cost: 9000, tags: ["shopping"] }),
-        cand("best", { cost: 9000, tags: ["food", "nature"] }),
+describe("의견 익명 집계", () => {
+  const qs = questions();
+  const [budget, avoid] = qs;
+
+  it("보기별 선택 인원·기타 인원·기타 원문을 세고, 복수 선택은 합이 응답자 수보다 클 수 있다", () => {
+    const responses: OpinionAnswers[] = [
+      { [budget.id]: { optionIds: [budget.options[0].id], other: null }, [avoid.id]: { optionIds: [avoid.options[0].id, avoid.options[1].id], other: null } },
+      { [budget.id]: { optionIds: [budget.options[1].id], other: null }, [avoid.id]: { optionIds: [avoid.options[0].id, avoid.options[2].id], other: "고수" } },
+      { [budget.id]: { optionIds: [], other: "1만 5천 원 정도면 좋겠어요" }, [avoid.id]: { optionIds: [avoid.options[0].id], other: null } },
+    ];
+    const r = aggregateOpinions(qs, responses);
+    expect(r.respondents).toBe(3);
+    expect(r.questions[0]).toEqual({
+      questionId: budget.id,
+      options: [
+        { optionId: budget.options[0].id, count: 1 },
+        { optionId: budget.options[1].id, count: 1 },
       ],
+      otherCount: 1,
+      otherTexts: ["1만 5천 원 정도면 좋겠어요"],
     });
-    expect(evals.map((e) => e.candidateId)).toEqual(["best", "low", "unknown", "over"]);
-    expect(decisionPool(evals)).toEqual(["best", "low", "unknown", "over"]);
-    expect(decisionPool(evals, ["unknown", "over", "없는-id"])).toEqual(["best", "low"]);
-    expect(evals.filter((e) => e.recommended).map((e) => e.candidateId)).toEqual(["best"]);
+    expect(r.questions[1].options.map((o) => o.count)).toEqual([3, 1, 1]);
+    expect(r.questions[1].options.reduce((s, o) => s + o.count, 0)).toBeGreaterThan(r.respondents);
+    expect(r.questions[1].otherTexts).toEqual(["고수"]);
   });
 
-  it("기타로 적은 비용·특징은 확인 필요 이유에 그대로 보여줌", () => {
-    const conditions = [cond("a", { maxBudget: 15000, restrictions: ["해산물"] }), cond("b"), cond("c")];
-    const e = evaluateCandidate(cand("x", { cost: null, features: null, notes: { cost: "메뉴마다 달라요", features: "시장 안 여러 가게" } }), {
-      category: "meal",
-      members,
-      conditions,
-    });
-    expect(e.state).toBe("needs_check");
-    expect(e.needsCheck.some((t) => t.includes("메뉴마다 달라요"))).toBe(true);
-    expect(e.needsCheck.some((t) => t.includes("시장 안 여러 가게"))).toBe(true);
+  it("집계에는 누가 골랐는지 담지 않고, 기타 의견은 제출 순서가 아닌 글자 순서로 보여준다", () => {
+    const r = aggregateOpinions(qs, [
+      { [budget.id]: { optionIds: [], other: "하" }, [avoid.id]: { optionIds: [avoid.options[0].id], other: null } },
+      { [budget.id]: { optionIds: [], other: "가" }, [avoid.id]: { optionIds: [avoid.options[0].id], other: null } },
+    ]);
+    expect(r.questions[0].otherTexts).toEqual(["가", "하"]);
+    expect(JSON.stringify(r)).not.toMatch(/memberId|member_id/);
   });
 
-  it("특징 '있음'의 기타 항목은 충돌로 보지 않고 참고로만 보여줌", () => {
-    const conditions = [cond("a", { restrictions: ["해산물"] }), cond("b"), cond("c")];
-    const e = evaluateCandidate(cand("x", { features: [], notes: { features: "고수" } }), { category: "meal", members, conditions });
-    expect(e.state).toBe("pass");
-    expect(e.reasons.some((r) => r.tone === "info" && r.text.includes("고수"))).toBe(true);
+  it("응답이 없으면 모두 0", () => {
+    const r = aggregateOpinions(qs, []);
+    expect(r.respondents).toBe(0);
+    expect(r.questions.every((q) => q.otherCount === 0 && q.options.every((o) => o.count === 0))).toBe(true);
   });
+});
 
-  it("후보가 없으면 빈 배열", () => {
-    expect(evaluateCandidates({ category: "meal", members, conditions: allConds, candidates: [] })).toEqual([]);
-  });
-
-  it("모든 후보가 충돌하면 추천은 없지만 결정 대상에는 포함", () => {
-    const conditions = members.map((m) => cond(m.id, { maxBudget: 1000 }));
-    const evals = evaluateCandidates({
-      category: "meal",
-      members,
-      conditions,
-      candidates: [cand("x", { tags: ["food"] }), cand("y")],
-    });
-    expect(decisionPool(evals)).toEqual(["x", "y"]);
-    expect(evals.some((e) => e.recommended)).toBe(false);
+describe("결정 대상 후보", () => {
+  it("등록 순서대로 모두 넣고, 방장이 뺀 후보만 제외한다", () => {
+    const cands = [
+      { id: "c", createdAt: 3 },
+      { id: "a", createdAt: 1 },
+      { id: "b", createdAt: 2 },
+    ];
+    expect(decisionPool(cands)).toEqual(["a", "b", "c"]);
+    expect(decisionPool(cands, ["b"])).toEqual(["a", "c"]);
+    expect(decisionPool([])).toEqual([]);
   });
 });
 
@@ -231,10 +174,10 @@ describe("구슬 레이스", () => {
 });
 
 describe("카드 상태", () => {
-  it("전원이 준비 완료해야 후보 확인 단계", () => {
-    expect(cardDisplayStatus("open", members, [cond("a"), cond("b")])).toBe("collecting");
-    expect(cardDisplayStatus("open", members, allConds)).toBe("reviewing");
-    expect(cardDisplayStatus("open", members, [cond("a"), cond("b"), cond("c", { ready: false })])).toBe("collecting");
+  it("전원이 의견을 제출해야 후보 확인 단계 (다른 사람·다른 카드 제출은 대신하지 않음)", () => {
+    expect(cardDisplayStatus("open", members, ["a", "b"])).toBe("collecting");
+    expect(cardDisplayStatus("open", members, ["a", "b", "c"])).toBe("reviewing");
+    expect(cardDisplayStatus("open", members, ["a", "b", "x"])).toBe("collecting");
     expect(cardDisplayStatus("open", [], [])).toBe("collecting");
     expect(cardDisplayStatus("deciding", members, [])).toBe("deciding");
     expect(cardDisplayStatus("confirmed", members, [])).toBe("confirmed");
@@ -305,7 +248,7 @@ describe("결정권 쟁탈전", () => {
 
   it("종료 후에는 종료 시각까지의 몫만 인정하고, 유예 시간이 지나면 0", () => {
     const late = acceptedTaps({ requested: 50, now: end + 500, lastAcceptedAt: end - 200, phaseStartedAt: t0 });
-    expect(late).toBe(Math.ceil(0.2 * BATTLE_MAX_TAPS_PER_SEC));
+    expect(late).toBe(3); // 0.2초 × 초당 15회
     expect(acceptedTaps({ requested: 5, now: end + 100, lastAcceptedAt: end, phaseStartedAt: t0 })).toBe(0);
     expect(acceptedTaps({ requested: 5, now: end + BATTLE_GRACE_MS + 1, lastAcceptedAt: end - 2000, phaseStartedAt: t0 })).toBe(0);
   });
@@ -313,6 +256,34 @@ describe("결정권 쟁탈전", () => {
   it("입력을 모아 두었다가 몰아서 보내면 최근 1초 분량만 인정", () => {
     const n = acceptedTaps({ requested: 150, now: end + 300, lastAcceptedAt: null, phaseStartedAt: t0 });
     expect(n).toBe(BATTLE_MAX_TAPS_PER_SEC);
+  });
+
+  // 서버처럼 인정된 묶음만 마지막 인정 시각을 갱신하며 계속 보낸다
+  function sendEvery(intervalMs: number, perBatch: number, untilMs = BATTLE_TAP_MS + BATTLE_GRACE_MS) {
+    let total = 0;
+    let lastAcceptedAt: number | null = null;
+    for (let t = start + intervalMs; t <= start + untilMs; t += intervalMs) {
+      const n = acceptedTaps({ requested: perBatch, now: t, lastAcceptedAt, phaseStartedAt: t0 });
+      if (n > 0) {
+        total += n;
+        lastAcceptedAt = t;
+      }
+    }
+    return total;
+  }
+
+  it("묶음 간격과 상관없이 3초 동안 인정되는 합은 초당 15회 상한(45회)을 넘지 않는다", () => {
+    const max = (BATTLE_TAP_MS / 1000) * BATTLE_MAX_TAPS_PER_SEC;
+    for (const interval of [10, 33, 50, 100, 250, 340, 700]) {
+      expect(sendEvery(interval, 100)).toBeLessThanOrEqual(max);
+    }
+    // 요청을 아주 잘게(10ms마다) 나눠 보내도 1회씩 더 받는 이득이 없다
+    expect(sendEvery(10, 100)).toBe(max);
+  });
+
+  it("상한 안의 정상 속도는 그대로 다 인정한다", () => {
+    // 초당 10회: 0.3초마다 3회씩
+    expect(sendEvery(300, 3, BATTLE_TAP_MS)).toBe(30);
   });
 
   it("음수·NaN 입력은 0", () => {

@@ -21,7 +21,8 @@ npm run dev          # http://localhost:3000
 | `npm run dev` | 개발 서버 |
 | `npm run build` / `npm start` | 프로덕션 빌드 / 실행 |
 | `npm test` | 추천·필터링·결정 로직 단위 테스트 (vitest) |
-| `npm run smoke` | **서버 실행 중**에 여러 참가자로 전체 흐름 검증 (`BASE_URL=http://localhost:3000` 기본) |
+| `npm run smoke` | 빌드 후 **내장 DB(메모리)로 테스트 서버**를 따로 띄워 여러 참가자로 전체 흐름 검증. 공유 DB에 테스트 계정·모임이 남지 않음 (`-- --no-build`로 빌드 생략) |
+| `BASE_URL=<주소> npm run smoke:url` | 지정한 서버(예: 배포 주소)에 직접 검증. **그 서버의 DB에 테스트 계정·모임이 남음** |
 | `npm run db:migrate` | Neon DB에 `db/schema.sql` 적용 |
 | `npm run lint` | ESLint |
 
@@ -41,14 +42,14 @@ npm run dev          # http://localhost:3000
 | 데모 모임 (`/demo`) | 어느 DB를 쓰든 일반 모임과 똑같이 저장됩니다. 다만 가상 참가자 3명은 **토큰이 없는 봇**이라 투표·게임에 참여하지 않습니다(방장이 투표 마감 가능). |
 | Vercel에서 `DATABASE_URL` 누락 | 로컬 DB로 몰래 동작하지 않고 “데이터베이스가 설정되지 않았어요” 오류를 반환합니다. |
 
-> 이 저장소에서 검증한 것은 **로컬 PGlite** 기준입니다. Neon 연결은 연결 문자열이 없어 실제로 실행해보지 못했습니다. 같은 SQL을 쓰지만, 최초 연결 후 `npm run smoke`를 한 번 돌려 확인하세요.
+> 이 저장소에서 검증한 것은 **로컬 PGlite** 기준입니다. Neon 연결은 연결 문자열이 없어 실제로 실행해보지 못했습니다. 같은 SQL을 쓰지만, 최초 연결 후 `BASE_URL=<주소> npm run smoke:url`을 한 번 돌려 확인하세요 (테스트 데이터가 그 DB에 남아요).
 
 ## Vercel 배포
 
 1. GitHub에 push → Vercel에서 Import.
 2. Project Settings → Environment Variables에 `DATABASE_URL` 추가 (Production/Preview). Vercel의 Neon 통합을 쓰면 자동으로 들어갑니다.
 3. 배포 전 로컬에서 `npm run db:migrate`로 스키마를 한 번 적용합니다.
-4. 배포 후 `BASE_URL=https://<배포주소> npm run smoke`로 확인.
+4. 배포 후 `BASE_URL=https://<배포주소> npm run smoke:url`로 확인 (테스트 계정·모임이 운영 DB에 남으니 꼭 필요할 때만).
 
 ## 구조
 
@@ -56,7 +57,8 @@ npm run dev          # http://localhost:3000
 db/schema.sql                    테이블 정의 (Room, Member, TastePreference, DecisionCard,
                                  MemberCondition, Candidate, Vote, BattleEntry, DecisionResult)
 scripts/migrate.mjs              Neon 스키마 적용
-scripts/smoke.mjs                다중 사용자 API 시나리오 검증 (28개)
+scripts/smoke.mjs                다중 사용자 API 시나리오 검증
+scripts/smoke-isolated.mjs       공유 DB 없이 테스트 서버를 띄워 smoke.mjs 실행 (npm run smoke)
 src/lib/domain/                  ★ 순수 로직 (UI·DB와 무관, 테스트 대상)
   constants.ts                   취향·캐릭터·제외 조건·타이밍 상수
   evaluate.ts                    필수 조건 판정, 취향 점수(3/2/1), 추천 이유, 카드 상태

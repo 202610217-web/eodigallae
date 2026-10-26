@@ -83,8 +83,10 @@ function Board() {
 
   const stepAction = (() => {
     switch (step.kind) {
-      case "condition":
-        return { label: `‘${step.card.title}’ 조건 입력하기`, run: () => openCard(step.card.id, "conditions") };
+      case "questions":
+        return { label: `‘${step.card.title}’ 질문 만들기`, run: () => openCard(step.card.id, "opinion") };
+      case "opinion":
+        return { label: `‘${step.card.title}’ 의견 제출하기`, run: () => openCard(step.card.id, "opinion") };
       case "invite":
         return { label: "친구 초대하기", run: () => setInviteOpen(true) };
       case "candidate":

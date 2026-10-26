@@ -21,7 +21,7 @@ export default function HomePage() {
               결정은 함께!
             </h1>
             <p className="mt-3 max-w-[34ch] text-ink-soft">
-              식사·활동·숙소마다 친구들의 조건과 취향을 모으고, 후보를 비교한 뒤 투표나 게임으로 함께 정해요.
+              식사·활동·숙소마다 친구들의 의견을 모으고, 후보를 올린 뒤 투표나 게임으로 함께 정해요.
             </p>
           </div>
         }

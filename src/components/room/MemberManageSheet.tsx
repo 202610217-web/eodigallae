@@ -26,7 +26,7 @@ export function MemberManageSheet({ open, onClose }: { open: boolean; onClose: (
   };
 
   const kick = async (memberId: string, nickname: string) => {
-    if (!window.confirm(`${nickname}님을 모임에서 내보낼까요?\n${nickname}님의 취향·조건·투표 기록이 삭제돼요. 올린 후보는 남아요.`)) return;
+    if (!window.confirm(`${nickname}님을 모임에서 내보낼까요?\n${nickname}님의 취향·의견·투표 기록이 삭제돼요. 올린 후보는 남아요.`)) return;
     setBusy(`kick-${memberId}`);
     if (await act({ type: "kickMember", memberId })) toast(`${nickname}님을 내보냈어요.`);
     setBusy(null);

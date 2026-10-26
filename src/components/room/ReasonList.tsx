@@ -1,6 +1,5 @@
 import { CircleCheck, CircleHelp, Info, TriangleAlert } from "lucide-react";
 import { cn } from "@/lib/client/cn";
-import type { CandidateEvaluation } from "@/lib/domain/types";
 
 const TONE = {
   good: { icon: CircleCheck, className: "text-success-ink" },
@@ -9,8 +8,13 @@ const TONE = {
   info: { icon: Info, className: "text-info-ink" },
 } as const;
 
+export interface Reason {
+  tone: keyof typeof TONE;
+  text: string;
+}
+
 /** 점수보다 먼저 보여주는 추천·주의 이유 목록 */
-export function ReasonList({ reasons, className }: { reasons: CandidateEvaluation["reasons"]; className?: string }) {
+export function ReasonList({ reasons, className }: { reasons: Reason[]; className?: string }) {
   if (reasons.length === 0) return null;
   return (
     <ul className={cn("space-y-1", className)}>

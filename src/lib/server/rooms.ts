@@ -8,18 +8,16 @@ import {
   type CharacterKey,
   type ColorKey,
   type DecisionMode,
-  type SettingKey,
   type TasteKey,
-  type VibeKey,
   guessCardTime,
 } from "@/lib/domain/constants";
 import { battleWindow, acceptedTaps, pickUniform, rankBattle, tallyVotes } from "@/lib/domain/decide";
-import { cardDisplayStatus, decisionPool, evaluateCandidates } from "@/lib/domain/evaluate";
+import { cardDisplayStatus, decisionPool } from "@/lib/domain/evaluate";
 import { MARBLE_COUNTDOWN_MS, MARBLE_FINISH_HOLD_MS, simulateMarbleRace, type MarbleRace } from "@/lib/domain/marble";
+import { aggregateOpinions, normalizeAnswers, normalizeQuestions, type QuestionInput } from "@/lib/domain/opinion";
 import type {
   BattleDetail,
   Candidate,
-  CandidateEvaluation,
   CandidateNotes,
   CandidateSetting,
   CandidateSnapshot,
@@ -29,7 +27,8 @@ import type {
   DecisionCardView,
   DecisionResult,
   Member,
-  MemberCondition,
+  OpinionAnswers,
+  OpinionQuestion,
   ResultDetail,
   RoomView,
   TasteRanks,
@@ -67,6 +66,14 @@ interface CardRow {
   tieIds: string[];
   phaseStartedAt: number | null;
   battleWinnerId: string | null;
+  questions: OpinionQuestion[];
+}
+
+/** 제출된 의견 한 건. 화면으로는 본인 것만 내려보내고, 나머지는 익명 집계로만 쓴다. */
+interface ResponseRow {
+  cardId: string;
+  memberId: string;
+  answers: OpinionAnswers;
 }
 
 interface VoteRow {
@@ -86,7 +93,7 @@ interface RoomData {
   room: RoomRow;
   members: Member[];
   cards: CardRow[];
-  conditions: MemberCondition[];
+  responses: ResponseRow[];
   candidates: Candidate[];
   votes: VoteRow[];
   battle: BattleRow[];
@@ -141,21 +148,7 @@ function mapCard(r: Row): CardRow {
     tieIds: json<string[]>(r.tie_ids),
     phaseStartedAt: optNum(r.phase_started_at),
     battleWinnerId: (r.battle_winner_id as string | null) ?? null,
-  };
-}
-
-function mapCondition(r: Row): MemberCondition {
-  return {
-    memberId: str(r.member_id),
-    cardId: str(r.card_id),
-    maxBudget: optNum(r.max_budget),
-    restrictions: json<string[]>(r.restrictions),
-    setting: r.setting as SettingKey,
-    vibe: r.vibe as VibeKey,
-    wish: str(r.wish),
-    note: str(r.note),
-    ready: Boolean(r.ready),
-    updatedAt: num(r.updated_at),
+    questions: r.questions ? json<OpinionQuestion[]>(r.questions) : [],
   };
 }
 
@@ -205,7 +198,7 @@ async function loadRoom(db: Db, roomId: string, token: string | null): Promise<R
       params: p,
     },
     { text: "SELECT * FROM decision_cards WHERE room_id = $1 ORDER BY sort_order", params: p },
-    { text: "SELECT * FROM member_conditions WHERE room_id = $1", params: p },
+    { text: "SELECT card_id, member_id, answers FROM opinion_responses WHERE room_id = $1", params: p },
     { text: "SELECT * FROM candidates WHERE room_id = $1 ORDER BY created_at", params: p },
     {
       text: `SELECT v.card_id, v.member_id, v.candidate_id FROM votes v
@@ -227,13 +220,13 @@ async function loadRoom(db: Db, roomId: string, token: string | null): Promise<R
       params: [roomId, token ? hashToken(token) : "-"],
     },
   ];
-  const [rooms, members, cards, conditions, candidates, votes, battle, results, me] = await db.batch(queries);
+  const [rooms, members, cards, responses, candidates, votes, battle, results, me] = await db.batch(queries);
   if (rooms.length === 0) throw new AppError(404, "모임을 찾을 수 없어요. 초대 링크를 다시 확인해주세요.", "ROOM_NOT_FOUND");
   return {
     room: mapRoom(rooms[0]),
     members: members.map(mapMember),
     cards: cards.map(mapCard),
-    conditions: conditions.map(mapCondition),
+    responses: responses.map((r) => ({ cardId: str(r.card_id), memberId: str(r.member_id), answers: json<OpinionAnswers>(r.answers) })),
     candidates: candidates.map(mapCandidate),
     votes: votes.map((r) => ({ cardId: str(r.card_id), memberId: str(r.member_id), candidateId: str(r.candidate_id) })),
     battle: battle.map((r) => ({
@@ -249,22 +242,28 @@ async function loadRoom(db: Db, roomId: string, token: string | null): Promise<R
 
 // ───────────────────────── 계산 헬퍼 ─────────────────────────
 
-function evaluateCard(data: RoomData, card: CardRow): CandidateEvaluation[] {
-  return evaluateCandidates({
-    category: card.category,
-    members: data.members,
-    conditions: data.conditions.filter((c) => c.cardId === card.id),
-    candidates: data.candidates.filter((c) => c.cardId === card.id),
-  });
-}
-
 function snapshot(c: Candidate): CandidateSnapshot {
   return { id: c.id, name: c.name, cost: c.cost, costNote: c.notes.cost, tags: c.tags, description: c.description, link: c.link };
 }
 
-function goodReasons(evaluations: CandidateEvaluation[], candidateId: string): string[] {
-  const e = evaluations.find((x) => x.candidateId === candidateId);
-  return e ? e.reasons.filter((r) => r.tone === "good").map((r) => r.text) : [];
+function hasSubmitted(data: RoomData, cardId: string, memberId: string): boolean {
+  return data.responses.some((r) => r.cardId === cardId && r.memberId === memberId);
+}
+
+/**
+ * 카드의 의견 투표 화면 정보. 다른 사람의 개별 응답은 내려보내지 않는다.
+ * 집계는 내가 이 카드에 의견을 제출한 경우에만 계산해 보낸다.
+ */
+function opinionView(data: RoomData, card: CardRow, meId: string): DecisionCardView["opinion"] {
+  const responses = data.responses.filter((r) => r.cardId === card.id);
+  const submitted = new Set(responses.map((r) => r.memberId));
+  const mine = responses.find((r) => r.memberId === meId) ?? null;
+  return {
+    questions: card.questions,
+    submittedMemberIds: data.members.filter((m) => submitted.has(m.id)).map((m) => m.id),
+    myAnswers: mine ? mine.answers : null,
+    results: mine ? aggregateOpinions(card.questions, responses.map((r) => r.answers)) : null,
+  };
 }
 
 const secureRandom = (n: number) => randomInt(n);
@@ -276,7 +275,7 @@ function buildView(data: RoomData, now: number, storage: Db["kind"]): RoomView {
   if (!me) throw new AppError(401, "이 모임의 참가자가 아니에요. 초대 링크로 먼저 참여해주세요.", "NOT_MEMBER");
 
   const cards: DecisionCardView[] = data.cards.map((card) => {
-    const conditions = data.conditions.filter((c) => c.cardId === card.id);
+    const opinion = opinionView(data, card, me.id);
     const candidates = data.candidates.filter((c) => c.cardId === card.id);
     const votes = data.votes.filter((v) => v.cardId === card.id);
     const entries = data.battle.filter((b) => b.cardId === card.id);
@@ -292,7 +291,7 @@ function buildView(data: RoomData, now: number, storage: Db["kind"]): RoomView {
       day: card.day,
       time: card.time,
       stage: card.stage,
-      status: cardDisplayStatus(card.stage, data.members, conditions),
+      status: cardDisplayStatus(card.stage, data.members, opinion.submittedMemberIds),
       mode: card.mode,
       phase: card.phase,
       round: card.round,
@@ -302,9 +301,8 @@ function buildView(data: RoomData, now: number, storage: Db["kind"]): RoomView {
       marble: marbleTiming(card, result),
       phaseStartedAt: card.phaseStartedAt,
       battleWinnerId: card.battleWinnerId,
-      conditions,
+      opinion,
       candidates,
-      evaluations: evaluateCard(data, card),
       voting:
         card.mode === "vote"
           ? {
@@ -403,12 +401,25 @@ export async function createRoom(input: {
   name: string;
   tripStart: string;
   tripEnd: string | null;
-  cards: { title: string; category: CardCategory; icon?: string | null; day?: number | null; time?: string | null }[];
+  cards: {
+    title: string;
+    category: CardCategory;
+    icon?: string | null;
+    day?: number | null;
+    time?: string | null;
+    questions?: QuestionInput[];
+  }[];
   host: Profile;
   isDemo?: boolean;
   /** 로그인한 상태면 방장 참가자를 계정에 연결 */
   userId?: string | null;
 }): Promise<{ roomId: string; token: string; memberId: string; inviteCode: string }> {
+  // 카드마다 방장이 정한 의견 투표 질문을 저장 전에 검사한다
+  const questions = input.cards.map((c) => {
+    const checked = normalizeQuestions(c.questions ?? [], newId);
+    if (!checked.ok) throw new AppError(400, `‘${c.title}’ 카드: ${checked.error}`);
+    return checked.value;
+  });
   const db = await getDb();
   const now = Date.now();
   const roomId = newId("room");
@@ -430,10 +441,21 @@ export async function createRoom(input: {
           params: [memberId, roomId, input.host.nickname, input.host.character, input.host.color, hashToken(token), now, input.userId ?? null],
         },
         ...input.cards.map((c, i) => ({
-          text: `INSERT INTO decision_cards (id, room_id, title, category, icon, sort_order, day, start_time, updated_at)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          text: `INSERT INTO decision_cards (id, room_id, title, category, icon, sort_order, day, start_time, questions, updated_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10)`,
           // 일정을 보내지 않으면(데모 등) 1일차 + 제목으로 추측한 시간
-          params: [newId("card"), roomId, c.title, c.category, c.icon ?? null, i, c.day ?? 1, c.time === undefined ? guessCardTime(c.title) : c.time, now],
+          params: [
+            newId("card"),
+            roomId,
+            c.title,
+            c.category,
+            c.icon ?? null,
+            i,
+            c.day ?? 1,
+            c.time === undefined ? guessCardTime(c.title) : c.time,
+            JSON.stringify(questions[i]),
+            now,
+          ],
         })),
       ]);
       return { roomId, token, memberId, inviteCode };
@@ -525,11 +547,35 @@ export async function joinRoom(code: string, profile: Profile, userId: string | 
 
 // ───────────────────────── 데모 모임 ─────────────────────────
 
-const DEMO_BOTS: { nickname: string; character: CharacterKey; color: ColorKey; taste: TasteRanks; budget: number | null; restrictions: Record<CardCategory, string[]> }[] = [
-  { nickname: "민지", character: "rabbit", color: "sky", taste: ["food", "photo", "nature"], budget: 30000, restrictions: { meal: ["날것(회·육회)"], activity: [], stay: [] } },
-  { nickname: "준호", character: "dog", color: "mint", taste: ["rest", "food", "shopping"], budget: 25000, restrictions: { meal: [], activity: ["물놀이·수상 활동"], stay: ["공용 욕실"] } },
-  { nickname: "서연", character: "bird", color: "violet", taste: ["nature", "photo", "culture"], budget: null, restrictions: { meal: ["매운 음식"], activity: [], stay: [] } },
+const DEMO_BOTS: { nickname: string; character: CharacterKey; color: ColorKey; taste: TasteRanks }[] = [
+  { nickname: "민지", character: "rabbit", color: "sky", taste: ["food", "photo", "nature"] },
+  { nickname: "준호", character: "dog", color: "mint", taste: ["rest", "food", "shopping"] },
+  { nickname: "서연", character: "bird", color: "violet", taste: ["nature", "photo", "culture"] },
 ];
+
+/**
+ * 데모 모임에만 미리 넣는 의견 투표 예시 (방장이 만든 것처럼 보여주는 체험용 내용).
+ * 일반 모임은 방장이 질문과 보기를 직접 만든다. picks[봇 순서] = 고른 보기 번호, other[봇 순서] = 기타 내용.
+ */
+const DEMO_QUESTIONS: Record<string, { title: string; multiple: boolean; options: string[]; picks: number[][]; other?: (string | null)[] }[]> = {
+  lunch: [
+    { title: "1인 예산", multiple: false, options: ["1만 원 이하", "2만 원 이하", "3만 원 이하"], picks: [[2], [1], []], other: [null, null, "1만 5천 원 정도면 좋겠어요"] },
+    { title: "메뉴", multiple: true, options: ["한식", "해산물", "양식", "분식"], picks: [[0, 1], [1], [0, 2]] },
+    { title: "피할 음식", multiple: true, options: ["날것", "해산물", "매운 음식", "없음"], picks: [[0], [3], [2]] },
+  ],
+  activity: [
+    { title: "활동 강도", multiple: false, options: ["가볍게 걷기", "적당히 움직이기", "땀 나게 놀기"], picks: [[1], [0], [1]] },
+    { title: "하고 싶은 것", multiple: true, options: ["사진 찍기", "체험", "쇼핑", "휴식"], picks: [[0, 1], [3], [0]], other: [null, null, "바다 보면서 쉬고 싶어요"] },
+  ],
+  dinner: [
+    { title: "1인 예산", multiple: false, options: ["2만 원 이하", "3만 원 이하", "상관없음"], picks: [[1], [0], [2]] },
+    { title: "분위기", multiple: false, options: ["조용한 곳", "활기찬 곳"], picks: [[0], [1], [0]] },
+  ],
+  stay: [
+    { title: "1박 가격 (1인)", multiple: false, options: ["5만 원 이하", "10만 원 이하", "상관없음"], picks: [[0], [1], [1]] },
+    { title: "꼭 필요한 것", multiple: true, options: ["주차", "개별 욕실", "취사", "없음"], picks: [[1], [1, 2], [3]] },
+  ],
+};
 
 type DemoCandidate = Omit<CandidateFields, "link" | "description" | "notes"> & { description: string };
 const DEMO_CANDIDATES: Record<string, DemoCandidate[]> = {
@@ -566,6 +612,19 @@ export async function createDemoRoom(host: Profile, userId: string | null = null
     (r) => ({ id: str(r.id), category: r.category as CardCategory, preset: CARD_PRESETS[num(r.sort_order)]?.key ?? "" }),
   );
   const queries: Query[] = [];
+  const demoQuestions = new Map(
+    cards.map((card) => {
+      const config = DEMO_QUESTIONS[card.preset] ?? [];
+      const questions: OpinionQuestion[] = config.map((q) => ({
+        id: newId("q"),
+        title: q.title,
+        multiple: q.multiple,
+        options: q.options.map((label) => ({ id: newId("o"), label })),
+      }));
+      queries.push({ text: "UPDATE decision_cards SET questions = $1::jsonb WHERE id = $2", params: [JSON.stringify(questions), card.id] });
+      return [card.id, { config, questions }] as const;
+    }),
+  );
   DEMO_BOTS.forEach((bot, i) => {
     const botId = newId("mem");
     queries.push(
@@ -578,19 +637,22 @@ export async function createDemoRoom(host: Profile, userId: string | null = null
         text: `INSERT INTO taste_preferences (member_id, room_id, rank1, rank2, rank3, updated_at) VALUES ($1, $2, $3, $4, $5, $6)`,
         params: [botId, created.roomId, ...bot.taste, now],
       },
-      ...cards.map((card) => ({
-        text: `INSERT INTO member_conditions (card_id, member_id, room_id, max_budget, restrictions, setting, vibe, wish, note, ready, updated_at)
-               VALUES ($1, $2, $3, $4, $5::jsonb, $6, 'any', '', '', true, $7)`,
-        params: [
-          card.id,
-          botId,
-          created.roomId,
-          card.category === "stay" ? (bot.budget ? 70000 : null) : bot.budget,
-          JSON.stringify(bot.restrictions[card.category]),
-          i === 0 ? "indoor" : "any",
-          now,
-        ],
-      })),
+      // 가상 참가자는 의견을 미리 제출해 둔다 (방장은 직접 제출해야 집계를 볼 수 있다)
+      ...cards
+        .filter((card) => (demoQuestions.get(card.id)?.questions.length ?? 0) > 0)
+        .map((card) => {
+          const { config, questions } = demoQuestions.get(card.id)!;
+          const answers: OpinionAnswers = Object.fromEntries(
+            questions.map((q, qi) => [
+              q.id,
+              { optionIds: config[qi].picks[i].map((oi) => q.options[oi].id), other: config[qi].other?.[i] ?? null },
+            ]),
+          );
+          return {
+            text: `INSERT INTO opinion_responses (card_id, member_id, room_id, answers, submitted_at, updated_at) VALUES ($1, $2, $3, $4::jsonb, $5, $5)`,
+            params: [card.id, botId, created.roomId, JSON.stringify(answers), now],
+          };
+        }),
     );
     for (const card of cards) {
       for (const [j, c] of (DEMO_CANDIDATES[card.preset] ?? []).entries()) {
@@ -635,16 +697,37 @@ function validateOptions(category: CardCategory, values: string[]) {
   if (bad) throw new AppError(400, `선택할 수 없는 항목이에요: ${bad}`);
 }
 
-function candidateParams(c: CandidateFields) {
+/**
+ * 후보 저장 값. 특징·실내/야외·분위기는 이전 조건 비교용 정보라 지금 화면은 보내지 않는다.
+ * 보내지 않으면 새 후보는 '정보 없음', 수정하는 후보는 기존 값(기타 내용 포함)을 그대로 둔다.
+ */
+function candidateParams(input: CandidateFields, existing: Candidate | null) {
+  const prev = existing?.notes ?? {};
+  const features = input.features !== undefined ? input.features : (existing?.features ?? null);
+  const setting = input.setting ?? existing?.setting ?? "unknown";
+  const vibe = input.vibe ?? existing?.vibe ?? "unknown";
+  const featureNote = input.features !== undefined ? input.notes.features : prev.features;
+  const settingNote = input.setting !== undefined ? input.notes.setting : prev.setting;
+  const vibeNote = input.vibe !== undefined ? input.notes.vibe : prev.vibe;
   // 기타 내용은 실제로 '기타'(값 없음)를 고른 항목만 남긴다
   const notes: CandidateNotes = {
-    ...(c.cost === null && c.notes.cost ? { cost: c.notes.cost } : {}),
-    // 특징 기타: '있음' 아래 목록에 없는 항목을 적은 것 (화면은 '있음'+기타를 고를 때만 보낸다)
-    ...(c.notes.features ? { features: c.notes.features } : {}),
-    ...(c.setting === "other" && c.notes.setting ? { setting: c.notes.setting } : {}),
-    ...(c.vibe === "other" && c.notes.vibe ? { vibe: c.notes.vibe } : {}),
+    ...(input.cost === null && input.notes.cost ? { cost: input.notes.cost } : {}),
+    // 특징 기타: '있음' 아래 목록에 없는 항목을 적은 것
+    ...(featureNote ? { features: featureNote } : {}),
+    ...(setting === "other" && settingNote ? { setting: settingNote } : {}),
+    ...(vibe === "other" && vibeNote ? { vibe: vibeNote } : {}),
   };
-  return [c.name, c.cost, JSON.stringify(c.tags), c.features === null ? null : JSON.stringify(c.features), c.setting, c.vibe, c.link, c.description, JSON.stringify(notes)];
+  return [
+    input.name,
+    input.cost,
+    JSON.stringify(input.tags),
+    features === null ? null : JSON.stringify(features),
+    setting,
+    vibe,
+    input.link,
+    input.description,
+    JSON.stringify(notes),
+  ];
 }
 
 async function insertResult(
@@ -705,7 +788,7 @@ async function closeVoting(db: Db, roomId: string, card: CardRow, token: string,
     {
       candidate,
       mode: "vote",
-      reasons: [`${votes.length}명 투표 중 ${top}표로 최다 득표`, ...goodReasons(evaluateCard(data, fresh), candidate.id)],
+      reasons: [`${votes.length}명 투표 중 ${top}표로 최다 득표`],
       detail: {
         kind: "vote",
         counts: tally.counts.map((c) => ({ ...c, name: names.get(c.candidateId) ?? "삭제된 후보" })),
@@ -735,35 +818,51 @@ export async function performAction(roomId: string, token: string | null, action
       return;
     }
 
-    case "saveCondition": {
-      const c = action.condition;
-      const card = requireCard(data, c.cardId);
+    case "saveQuestions": {
+      requireHost(me);
+      const card = requireCard(data, action.cardId);
       requireEditable(card);
-      validateOptions(card.category, c.restrictions);
-      await db.query(
-        `INSERT INTO member_conditions (card_id, member_id, room_id, max_budget, restrictions, setting, vibe, wish, note, ready, updated_at)
-         VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, $11)
-         ON CONFLICT (card_id, member_id) DO UPDATE SET max_budget = $4, restrictions = $5::jsonb, setting = $6, vibe = $7,
-           wish = $8, note = $9, ready = $10, updated_at = $11`,
-        [card.id, me.id, roomId, c.maxBudget, JSON.stringify([...new Set(c.restrictions)]), c.setting, c.vibe, c.wish, c.note, c.ready, now],
+      if (data.responses.some((r) => r.cardId === card.id)) {
+        throw new AppError(409, "이미 제출된 의견이 있어 질문과 보기를 바꿀 수 없어요.", "QUESTIONS_LOCKED");
+      }
+      const checked = normalizeQuestions(action.questions, newId);
+      if (!checked.ok) throw new AppError(400, checked.error);
+      // 응답이 없을 때만 바꾼다. 확인과 저장 사이에 제출된 응답이 있으면 바꾸지 않는다.
+      const rows = await db.query(
+        `UPDATE decision_cards SET questions = $1::jsonb, updated_at = $2
+         WHERE id = $3 AND stage = 'open' AND NOT locked AND NOT EXISTS (SELECT 1 FROM opinion_responses WHERE card_id = $3)
+         RETURNING id`,
+        [JSON.stringify(checked.value), now, card.id],
       );
+      if (rows.length === 0) throw new AppError(409, "이미 제출된 의견이 있어 질문과 보기를 바꿀 수 없어요.", "QUESTIONS_LOCKED");
       return;
     }
 
-    case "setConditionReady": {
+    case "submitOpinion": {
       const card = requireCard(data, action.cardId);
       requireEditable(card);
+      const checked = normalizeAnswers(card.questions, action.answers);
+      if (!checked.ok) throw new AppError(400, checked.error);
+      // 사람·일정당 한 행: 다시 제출하면 내 응답을 갱신한다 (중복 클릭·재요청도 한 명으로 센다).
+      // 검사한 질문과 저장 시점의 질문이 같을 때만 저장한다.
       const rows = await db.query(
-        `UPDATE member_conditions SET ready = $1, updated_at = $2 WHERE card_id = $3 AND member_id = $4 RETURNING card_id`,
-        [action.ready, now, card.id, me.id],
+        `INSERT INTO opinion_responses (card_id, member_id, room_id, answers, submitted_at, updated_at)
+         SELECT $1, $2, $3, $4::jsonb, $5, $5 WHERE EXISTS (
+           SELECT 1 FROM decision_cards WHERE id = $1 AND stage = 'open' AND NOT locked AND questions = $6::jsonb)
+         ON CONFLICT (card_id, member_id) DO UPDATE SET answers = EXCLUDED.answers, updated_at = EXCLUDED.updated_at
+         RETURNING card_id`,
+        [card.id, me.id, roomId, JSON.stringify(checked.value), now, JSON.stringify(card.questions)],
       );
-      if (rows.length === 0) throw new AppError(400, "먼저 조건을 저장해주세요.");
+      if (rows.length === 0) throw new AppError(409, "질문이 바뀌었거나 지금은 의견을 낼 수 없어요. 화면을 새로고침해주세요.");
       return;
     }
 
     case "addCandidate": {
       const card = requireCard(data, action.cardId);
       requireEditable(card);
+      if (!hasSubmitted(data, card.id, me.id)) {
+        throw new AppError(403, "이 일정의 의견을 먼저 제출해주세요. 제출하면 후보를 등록할 수 있어요.", "OPINION_REQUIRED");
+      }
       if (action.candidate.features) validateOptions(card.category, action.candidate.features);
       if (data.candidates.filter((c) => c.cardId === card.id).length >= LIMITS.maxCandidates) {
         throw new AppError(409, `후보는 카드당 ${LIMITS.maxCandidates}개까지 등록할 수 있어요.`);
@@ -771,7 +870,7 @@ export async function performAction(roomId: string, token: string | null, action
       await db.query(
         `INSERT INTO candidates (id, card_id, room_id, created_by, name, cost, tags, features, setting, vibe, link, description, notes, created_at, updated_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9, $10, $11, $12, $13::jsonb, $14, $14)`,
-        [newId("cand"), card.id, roomId, me.id, ...candidateParams(action.candidate), now],
+        [newId("cand"), card.id, roomId, me.id, ...candidateParams(action.candidate, null), now],
       );
       return;
     }
@@ -791,7 +890,7 @@ export async function performAction(roomId: string, token: string | null, action
       await db.query(
         `UPDATE candidates SET name = $1, cost = $2, tags = $3::jsonb, features = $4::jsonb, setting = $5, vibe = $6, link = $7,
            description = $8, notes = $9::jsonb, updated_at = $10 WHERE id = $11`,
-        [...candidateParams(action.candidate), now, cand.id],
+        [...candidateParams(action.candidate, cand), now, cand.id],
       );
       return;
     }
@@ -800,8 +899,11 @@ export async function performAction(roomId: string, token: string | null, action
       requireHost(me);
       const card = requireCard(data, action.cardId);
       if (card.stage !== "open") throw new AppError(409, "이미 결정이 진행 중이거나 확정된 카드예요.");
-      // 조건 충돌·확인 필요 후보도 기본으로 포함하고, 방장이 검토 단계에서 뺀 후보만 제외한다
-      const pool = decisionPool(evaluateCard(data, card), action.excludeIds);
+      // 등록된 후보를 모두 넣고, 방장이 뺀 후보만 제외한다
+      const pool = decisionPool(
+        data.candidates.filter((c) => c.cardId === card.id),
+        action.excludeIds,
+      );
       if (pool.length === 0) {
         throw new AppError(
           409,
@@ -870,7 +972,6 @@ export async function performAction(roomId: string, token: string | null, action
       requireHost(me);
       const card = requireCard(data, action.cardId);
       requirePhase(card, "roulette_ready", "룰렛을 돌릴 수 있는 단계가 아니에요.");
-      const evaluations = evaluateCard(data, card);
       const fromTie = card.tieIds.length > 0;
       // 결과를 먼저 정하고, 화면의 회전은 이 결과를 보여주기만 한다
       const poolIds = fromTie ? card.tieIds : card.pool;
@@ -883,10 +984,7 @@ export async function performAction(roomId: string, token: string | null, action
         {
           candidate: item,
           mode: card.mode ?? "roulette",
-          reasons: [
-            fromTie ? `다수결 동점 후보 ${pool.length}개 중 룰렛 추첨` : `결정 대상 후보 ${pool.length}개 중 같은 확률로 추첨`,
-            ...goodReasons(evaluations, item.id),
-          ],
+          reasons: [fromTie ? `다수결 동점 후보 ${pool.length}개 중 룰렛 추첨` : `결정 대상 후보 ${pool.length}개 중 같은 확률로 추첨`],
           detail: { kind: "roulette", pool: pool.map((c) => ({ candidateId: c.id, name: c.name })), winnerIndex: index, fromTie },
           requiredPhase: "roulette_ready",
         },
@@ -899,7 +997,6 @@ export async function performAction(roomId: string, token: string | null, action
       requireHost(me);
       const card = requireCard(data, action.cardId);
       requirePhase(card, "marble_ready", "구슬 레이스를 시작할 수 있는 단계가 아니에요.");
-      const evaluations = evaluateCard(data, card);
       const pool = card.pool.map((id) => data.candidates.find((c) => c.id === id)).filter((c) => c !== undefined);
       if (pool.length === 0) throw new AppError(409, "레이스에 넣을 후보가 없어요. 결정을 다시 진행해주세요.");
       // 서버가 경주를 끝까지 계산해 저장하고, 모두 같은 기록을 같은 시각에 재생한다
@@ -925,7 +1022,7 @@ export async function performAction(roomId: string, token: string | null, action
         {
           candidate: winner,
           mode: "marble",
-          reasons: [`구슬 ${pool.length}개 중 가장 먼저 결승선 도착`, ...goodReasons(evaluations, winner.id)],
+          reasons: [`구슬 ${pool.length}개 중 가장 먼저 결승선 도착`],
           detail: { kind: "marble", order, startsAt, endsAt },
           requiredPhase: "marble_ready",
           nextPhase: "marble_running",
@@ -984,7 +1081,6 @@ export async function performAction(roomId: string, token: string | null, action
       const card = requireCard(data, action.cardId);
       requirePhase(card, "battle_picking", "지금은 장소를 고를 수 있는 단계가 아니에요.");
       if (card.battleWinnerId !== me.id) throw new AppError(403, "결정권자만 장소를 고를 수 있어요.");
-      const evaluations = evaluateCard(data, card);
       if (!card.pool.includes(action.candidateId)) {
         throw new AppError(400, "결정 대상 후보만 고를 수 있어요.");
       }
@@ -1002,7 +1098,7 @@ export async function performAction(roomId: string, token: string | null, action
         {
           candidate,
           mode: "battle",
-          reasons: [`${me.nickname}님이 ${myTaps}회 연타로 결정권 획득`, `${me.nickname}님이 직접 선택`, ...goodReasons(evaluations, candidate.id)],
+          reasons: [`${me.nickname}님이 ${myTaps}회 연타로 결정권 획득`, `${me.nickname}님이 직접 선택`],
           detail,
           requiredPhase: "battle_picking",
         },
@@ -1064,6 +1160,14 @@ export async function performAction(roomId: string, token: string | null, action
       return;
     }
 
+    case "setCardIcon": {
+      // 아이콘은 장식이라 카드 종류·의견 투표 질문은 그대로 둔다
+      requireHost(me);
+      const card = requireCard(data, action.cardId);
+      await db.query("UPDATE decision_cards SET icon = $1, updated_at = $2 WHERE id = $3", [action.icon, now, card.id]);
+      return;
+    }
+
     case "transferHost": {
       requireHost(me);
       const target = requireOtherMember(data, me, action.memberId);
@@ -1087,7 +1191,7 @@ export async function performAction(roomId: string, token: string | null, action
       if (data.cards.some((c) => c.stage === "deciding")) {
         throw new AppError(409, "결정이 진행 중일 때는 내보낼 수 없어요. 결정을 마치거나 취소한 뒤 다시 시도해주세요.", "DECIDING");
       }
-      // 취향·조건·투표 기록·추가 참여 토큰은 함께 삭제(ON DELETE CASCADE). 그 사람이 올린 후보는 남긴다.
+      // 취향·조건·의견·투표 기록·추가 참여 토큰은 함께 삭제(ON DELETE CASCADE). 그 사람이 올린 후보는 남긴다.
       await db.query("DELETE FROM members WHERE id = $1 AND room_id = $2 AND NOT is_host", [target.id, roomId]);
       return;
     }

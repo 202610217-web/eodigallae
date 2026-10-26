@@ -3,7 +3,6 @@
 import { CalendarCheck, CircleCheck, Crown, ExternalLink, PartyPopper } from "lucide-react";
 import { useState } from "react";
 import { useRoom } from "@/components/room/RoomProvider";
-import { IssueHint } from "@/components/room/IssueHint";
 import { ReasonList } from "@/components/room/ReasonList";
 import { Button } from "@/components/ui/Button";
 import { Pill } from "@/components/ui/StatusBadge";
@@ -44,7 +43,6 @@ export function ResultReveal({ card, result }: { card: DecisionCardView; result:
         </div>
         <div className="space-y-3 px-5 py-4">
           <TasteTags tags={result.candidate.tags} />
-          <IssueHint evaluation={card.evaluations.find((e) => e.candidateId === result.candidate.id)} className="text-sm" />
           {result.candidate.description && <p className="text-sm">{result.candidate.description}</p>}
           <div>
             <p className="mb-1.5 text-sm font-bold">선택 이유</p>
