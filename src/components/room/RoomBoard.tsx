@@ -15,7 +15,6 @@ import { DecisionCard } from "./DecisionCard";
 import { InviteSheet, RoomHeader } from "./RoomHeader";
 import { MemberStatusList } from "./MemberStatusList";
 import { RoomProvider, useRoom, type LoadError } from "./RoomProvider";
-import { TastePanel } from "./TasteRankPicker";
 
 export function RoomApp({ roomId }: { roomId: string }) {
   return (
@@ -73,7 +72,6 @@ function RoomFallback({ loading, error, retry }: { loading: boolean; error: Load
 function Board() {
   const { view } = useRoom();
   const [detail, setDetail] = useState<{ cardId: string; tab: DetailTab } | null>(null);
-  const [tasteOpen, setTasteOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const openCard = (cardId: string, tab?: DetailTab) => {
     const card = view.cards.find((c) => c.id === cardId);
@@ -85,8 +83,6 @@ function Board() {
 
   const stepAction = (() => {
     switch (step.kind) {
-      case "taste":
-        return { label: "내 취향 3가지 고르기", run: () => setTasteOpen(true) };
       case "condition":
         return { label: `‘${step.card.title}’ 조건 입력하기`, run: () => openCard(step.card.id, "conditions") };
       case "invite":
@@ -119,7 +115,6 @@ function Board() {
         <div className="grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)_300px]">
           <aside className="min-w-0 space-y-4 lg:sticky lg:top-24 lg:self-start">
             <MemberStatusList />
-            <TastePanel editorOpen={tasteOpen} onEditorOpenChange={setTasteOpen} />
           </aside>
 
           <section aria-labelledby="cards-title" className="min-w-0">

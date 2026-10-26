@@ -10,15 +10,14 @@ export function myCondition(card: DecisionCardView, meId: string) {
   return card.conditions.find((c) => c.memberId === meId) ?? null;
 }
 
-/** 참가자 단위 준비 상태: 취향 입력 + 아직 열린 카드의 조건 준비 완료 */
+/** 참가자 단위 준비 상태: 아직 열린 카드의 조건을 모두 준비 완료했는지 */
 export function memberProgress(view: RoomView, member: Member) {
   const openCards = view.cards.filter((c) => c.stage === "open");
   const readyCards = openCards.filter((c) => c.conditions.some((x) => x.memberId === member.id && x.ready)).length;
   return {
-    tasteDone: member.taste !== null,
     readyCards,
     totalCards: openCards.length,
-    ready: member.taste !== null && readyCards === openCards.length,
+    ready: readyCards === openCards.length,
   };
 }
 
@@ -27,7 +26,6 @@ export function memberName(view: RoomView, memberId: string): string {
 }
 
 export type NextStep =
-  | { kind: "taste" }
   | { kind: "condition"; card: DecisionCardView }
   | { kind: "invite" }
   | { kind: "candidate"; card: DecisionCardView }
@@ -36,7 +34,6 @@ export type NextStep =
 
 /** 보드에서 지금 해야 할 다음 행동 하나를 고른다 */
 export function nextStep(view: RoomView): NextStep {
-  if (!view.me.taste) return { kind: "taste" };
   const openCards = view.cards.filter((c) => c.stage === "open" && !c.locked);
   const needCondition = openCards.find((c) => !myCondition(c, view.me.id)?.ready);
   if (needCondition) return { kind: "condition", card: needCondition };

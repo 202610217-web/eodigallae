@@ -21,3 +21,15 @@ export function formatTrip(start: string, end: string | null): string {
   if (!end || end === start) return formatDate(start);
   return `${formatDate(start)} – ${formatDate(end)}`;
 }
+
+/** 여행 일수: "1박 2일", 같은 날이거나 종료일이 없으면 "당일치기" (날짜는 YYYY-MM-DD) */
+export function formatTripLength(start: string, end: string | null): string {
+  if (!end) return "당일치기";
+  const nights = Math.round((Date.UTC(...ymd(end)) - Date.UTC(...ymd(start))) / 86_400_000);
+  return nights <= 0 ? "당일치기" : `${nights}박 ${nights + 1}일`;
+}
+
+function ymd(date: string): [number, number, number] {
+  const [y, m, d] = date.split("-").map(Number);
+  return [y, m - 1, d];
+}

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Sheet } from "@/components/ui/Sheet";
-import { formatTrip } from "@/lib/client/format";
+import { formatTrip, formatTripLength } from "@/lib/client/format";
 import { useRoom } from "./RoomProvider";
 
 export function Logo({ compact = false }: { compact?: boolean }) {
@@ -33,7 +33,11 @@ export function RoomHeader() {
           <h1 className="truncate text-xl font-extrabold leading-tight md:text-2xl">{view.name}</h1>
           <p className="flex items-center gap-1 text-[13px] text-ink-soft">
             <CalendarDays className="size-3.5 shrink-0" aria-hidden />
-            <span className="truncate">{formatTrip(view.tripStart, view.tripEnd)}</span>
+            <span className="truncate">
+              <strong className="font-semibold text-ink">{formatTripLength(view.tripStart, view.tripEnd)}</strong>
+              {" · "}
+              {formatTrip(view.tripStart, view.tripEnd)}
+            </span>
           </p>
         </div>
         <Button variant="secondary" size="md" icon={<UserPlus className="size-4" aria-hidden />} onClick={() => setInviteOpen(true)}>

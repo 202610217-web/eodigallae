@@ -81,13 +81,9 @@ export function CandidateCard({
         </p>
       )}
 
-      {evaluation && (
+      {evaluation && evaluation.reasons.length > 0 && (
         <div className="mt-3 rounded-xl bg-cream px-3 py-2.5">
           <ReasonList reasons={evaluation.reasons} />
-          <p className="mt-2 border-t border-line pt-2 text-xs text-ink-soft">
-            취향 일치 점수 <strong className="text-ink">{evaluation.tasteScore}점</strong>
-            {" · "}1순위 3점, 2순위 2점, 3순위 1점 합산 (참고용)
-          </p>
         </div>
       )}
 
@@ -212,7 +208,7 @@ export function CandidateList({
             </Notice>
           )}
 
-          <p className="text-xs text-ink-soft">순서는 필수 조건 통과 여부와 취향 일치 점수로 정한 참고용이에요. 추천은 통과 후보 중에서만 골라요. 최종 결정은 함께 정해요.</p>
+          <p className="text-xs text-ink-soft">순서는 필수 조건 통과 여부로 정한 참고용이에요. 최종 결정은 함께 정해요.</p>
 
           <div className="space-y-3">
             {ordered.map((c, i) => (

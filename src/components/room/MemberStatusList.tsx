@@ -6,7 +6,6 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { Pill } from "@/components/ui/StatusBadge";
 import { memberProgress } from "@/lib/client/selectors";
-import { tasteTitle } from "@/lib/domain/evaluate";
 import { MemberManageSheet } from "./MemberManageSheet";
 import { InviteSheet } from "./RoomHeader";
 import { useRoom } from "./RoomProvider";
@@ -30,7 +29,13 @@ export function MemberStatusList() {
             {readyCount}/{view.members.length}명 준비 완료
           </Pill>
           {view.me.isHost && !alone && (
-            <Button size="sm" variant="ghost" icon={<Settings2 className="size-3.5" aria-hidden />} onClick={() => setManageOpen(true)}>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="shrink-0 whitespace-nowrap"
+              icon={<Settings2 className="size-3.5" aria-hidden />}
+              onClick={() => setManageOpen(true)}
+            >
               관리
             </Button>
           )}
@@ -38,7 +43,7 @@ export function MemberStatusList() {
       </div>
 
       <ul className="flex gap-3 overflow-x-auto pb-1 lg:flex-col lg:gap-2 lg:overflow-visible">
-        {progress.map(({ member, tasteDone, readyCards, totalCards, ready }, i) => (
+        {progress.map(({ member, readyCards, totalCards, ready }, i) => (
           <li
             key={member.id}
             className="stagger flex w-[76px] shrink-0 flex-col items-center gap-1 text-center lg:w-auto lg:flex-row lg:gap-3 lg:rounded-xl lg:px-1 lg:py-1.5 lg:text-left"
@@ -59,10 +64,7 @@ export function MemberStatusList() {
                 {member.id === view.me.id && <span className="shrink-0 text-xs font-medium text-coral-strong">나</span>}
               </p>
               <p className="truncate text-xs text-ink-soft">
-                {tasteDone ? tasteTitle(member.taste) : "취향 미입력"}
-                <span className="hidden lg:inline">
-                  {" · "}조건 {readyCards}/{totalCards}
-                </span>
+                조건 {readyCards}/{totalCards}
               </p>
             </div>
           </li>
