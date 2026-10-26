@@ -118,25 +118,37 @@ export function phaseText(card: DecisionCardView): string | null {
   }
 }
 
+/** 카드 아래 한 줄 안내. action: 지금 내가 하거나 같이 볼 일이라 강조한다 */
+function nextStep(card: DecisionCardView, myReady: boolean): { text: string; action: boolean } {
+  const phase = phaseText(card);
+  if (phase) return { text: phase, action: true };
+  if (card.stage === "open" && !myReady) {
+    return card.locked ? { text: "방장이 잠근 카드예요", action: false } : { text: "내 조건을 입력해주세요", action: true };
+  }
+  if (card.candidates.length === 0) return { text: "첫 번째 후보를 등록해주세요", action: false };
+  return { text: "후보를 비교하고 결정 방식을 골라요", action: false };
+}
+
 export function DecisionCard({ card, index, onOpen }: { card: DecisionCardView; index: number; onOpen: () => void }) {
   const { view, justConfirmed } = useRoom();
+  const statusId = useId();
   const ready = cardReadyCount(card);
   const total = view.members.length;
   const mine = myCondition(card, view.me.id);
   const passCount = card.evaluations.filter((e) => e.state === "pass").length;
   const confirmed = card.stage === "confirmed" && card.result;
+  const schedule = formatSchedule(card.day, card.time);
+  const step = nextStep(card, Boolean(mine?.ready));
 
+  // 카드 전체가 눌리지만, 제목·정보가 버튼 안에 묻히지 않도록 제목 버튼의 ::after를 카드 크기로 펼친다
   return (
-    <button
-      type="button"
-      onClick={onOpen}
+    <article
       className={cn(
-        "stagger group flex min-h-44 w-full flex-col rounded-[var(--radius-card)] border bg-white p-4 text-left transition-colors hover:border-ink-faint",
-        confirmed ? "border-[#bfe2cb]" : "border-transparent",
+        "stagger group relative flex min-h-44 w-full flex-col rounded-[var(--radius-card)] border bg-white p-4 transition-colors hover:border-ink-faint",
+        confirmed ? "border-[#bfe2cb]" : card.stage === "deciding" ? "border-coral/50" : "border-transparent",
         justConfirmed === card.id && "animate-confirm",
       )}
       style={{ "--i": index } as CSSProperties}
-      aria-label={`${card.title} 상세 열기`}
     >
       <div className="flex w-full items-start gap-3">
         <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-cream text-ink">
@@ -144,8 +156,16 @@ export function DecisionCard({ card, index, onOpen }: { card: DecisionCardView; 
         </span>
         <div className="min-w-0 flex-1">
           <h3 className="flex items-center gap-1.5 text-lg font-bold leading-snug">
-            <span className="truncate">{card.title}</span>
-            {card.locked && <Lock className="size-4 shrink-0 text-ink-soft" aria-label="잠김" />}
+            <button
+              type="button"
+              onClick={onOpen}
+              aria-label={`${card.title} 상세 열기`}
+              aria-describedby={`${statusId}-status ${statusId}-detail`}
+              className="truncate text-left after:absolute after:inset-0 after:rounded-[var(--radius-card)] focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-coral-strong"
+            >
+              {card.title}
+            </button>
+            {card.locked && <Lock className="size-4 shrink-0 text-ink-soft" role="img" aria-label="잠김" />}
           </h3>
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
             <StatusBadge status={card.status} />
