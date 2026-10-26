@@ -1,5 +1,6 @@
 import "server-only";
 import { randomBytes, scrypt, timingSafeEqual, type ScryptOptions } from "node:crypto";
+import { COLOR_KEYS, type ColorKey } from "@/lib/domain/constants";
 import { getDb } from "./db";
 import { AppError } from "./errors";
 import { memberIdByToken } from "./rooms";
@@ -192,6 +193,8 @@ export interface MyRoom {
   isHost: boolean;
   /** 홈 목록에서 진행 상황을 보여주기 위한 개수 */
   memberCount: number;
+  /** 참가자 색 (들어온 순서). 홈 카드의 참가자 동그라미에 쓴다 */
+  memberColors: ColorKey[];
   cardCount: number;
   confirmedCount: number;
   decidingCount: number;
@@ -202,6 +205,7 @@ export async function listMyRooms(userId: string): Promise<MyRoom[]> {
   const rows = await db.query(
     `SELECT r.id, r.name, r.trip_start, r.trip_end, m.nickname, m.is_host,
        (SELECT count(*) FROM members mm WHERE mm.room_id = r.id) AS member_count,
+       (SELECT string_agg(mm.color, ',' ORDER BY mm.joined_at) FROM members mm WHERE mm.room_id = r.id) AS member_colors,
        (SELECT count(*) FROM decision_cards c WHERE c.room_id = r.id) AS card_count,
        (SELECT count(*) FROM decision_cards c WHERE c.room_id = r.id AND c.stage = 'confirmed') AS confirmed_count,
        (SELECT count(*) FROM decision_cards c WHERE c.room_id = r.id AND c.stage = 'deciding') AS deciding_count
@@ -217,6 +221,9 @@ export async function listMyRooms(userId: string): Promise<MyRoom[]> {
     nickname: String(r.nickname),
     isHost: Boolean(r.is_host),
     memberCount: Number(r.member_count),
+    memberColors: String(r.member_colors ?? "")
+      .split(",")
+      .filter((c): c is ColorKey => COLOR_KEYS.includes(c as ColorKey)),
     cardCount: Number(r.card_count),
     confirmedCount: Number(r.confirmed_count),
     decidingCount: Number(r.deciding_count),

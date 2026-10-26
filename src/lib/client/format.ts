@@ -22,6 +22,22 @@ export function formatTrip(start: string, end: string | null): string {
   return `${formatDate(start)} – ${formatDate(end)}`;
 }
 
+/** 짧은 여행 기간: "11.07 — 11.08", 하루면 "11.07" */
+export function formatTripShort(start: string, end: string | null): string {
+  const short = (iso: string) => {
+    const [, m, d] = iso.split("-");
+    return `${m}.${d}`;
+  };
+  if (!end || end === start) return short(start);
+  return `${short(start)} — ${short(end)}`;
+}
+
+/** 달력 칸에 쓰는 날짜 조각: { month: "11월", day: "07", weekday: "토" } */
+export function dateParts(iso: string): { month: string; day: string; weekday: string } {
+  const [y, m, d] = ymd(iso);
+  return { month: `${m + 1}월`, day: String(d).padStart(2, "0"), weekday: DAYS[new Date(y, m, d).getDay()] };
+}
+
 /** 여행 일수: "1박 2일", 같은 날이거나 종료일이 없으면 "당일치기" (날짜는 YYYY-MM-DD) */
 export function formatTripLength(start: string, end: string | null): string {
   const nights = tripDayCount(start, end) - 1;
