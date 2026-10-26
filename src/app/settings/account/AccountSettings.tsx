@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { FieldError, Label, TextInput } from "@/components/ui/Field";
 import { LoadingState, Notice } from "@/components/ui/States";
 import { api } from "@/lib/client/api";
+import { copyText } from "@/lib/client/clipboard";
 import { changePasswordSchema, changeUsernameSchema } from "@/lib/validation";
 
 export function AccountSettings() {
@@ -179,12 +180,7 @@ function RecoverySection({ account, onChanged }: { account: Account; onChanged: 
 
   const copy = async () => {
     if (!code) return;
-    try {
-      await navigator.clipboard.writeText(code);
-      setCopied(true);
-    } catch {
-      setCopied(false);
-    }
+    setCopied(await copyText(code));
   };
 
   return (

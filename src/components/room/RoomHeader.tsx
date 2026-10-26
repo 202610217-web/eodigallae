@@ -6,6 +6,7 @@ import { useState } from "react";
 import { ProfileMenu } from "@/components/account/ProfileMenu";
 import { Button } from "@/components/ui/Button";
 import { Sheet } from "@/components/ui/Sheet";
+import { copyText } from "@/lib/client/clipboard";
 import { formatTrip, formatTripLength } from "@/lib/client/format";
 import { useRoom } from "./RoomProvider";
 
@@ -26,12 +27,11 @@ export function RoomHeader() {
   const [copied, setCopied] = useState(false);
 
   const copyCode = async () => {
-    try {
-      await navigator.clipboard.writeText(view.inviteCode);
+    if (await copyText(view.inviteCode)) {
       setCopied(true);
       toast("초대 코드를 복사했어요.");
       window.setTimeout(() => setCopied(false), 1600);
-    } catch {
+    } else {
       toast("복사하지 못했어요. 코드를 직접 알려주세요.", "error");
     }
   };
@@ -87,11 +87,10 @@ export function InviteSheet({ open, onClose }: { open: boolean; onClose: () => v
   const link = typeof window === "undefined" ? "" : `${window.location.origin}/join/${view.inviteCode}`;
 
   const copy = async (text: string, kind: "code" | "link") => {
-    try {
-      await navigator.clipboard.writeText(text);
+    if (await copyText(text)) {
       setCopied(kind);
       window.setTimeout(() => setCopied(null), 1600);
-    } catch {
+    } else {
       toast("복사하지 못했어요. 직접 선택해서 복사해주세요.", "error");
     }
   };
