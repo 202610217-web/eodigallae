@@ -3,21 +3,15 @@
 import { ChevronRight, FlaskConical, KeyRound, Plus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useState } from "react";
 import { AccountPanel } from "@/components/AccountPanel";
 import { Button } from "@/components/ui/Button";
 import { FieldError, TextInput } from "@/components/ui/Field";
-import { readRecentRooms, recentRoomsSnapshot } from "@/lib/client/recent";
-
-const subscribeNothing = () => () => {};
 
 export function HomeActions() {
   const router = useRouter();
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
-  // localStorage는 브라우저에서만 읽을 수 있어 서버 렌더링에서는 빈 목록으로 그린다
-  const snapshot = useSyncExternalStore(subscribeNothing, recentRoomsSnapshot, () => null);
-  const recent = useMemo(() => (snapshot === null ? [] : readRecentRooms()), [snapshot]);
 
   const join = (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,22 +65,6 @@ export function HomeActions() {
       </form>
 
       <AccountPanel />
-
-      {recent.length > 0 && (
-        <section className="rounded-[var(--radius-card)] bg-white p-5">
-          <h2 className="text-sm font-bold text-ink-soft">최근 들어간 모임</h2>
-          <ul className="mt-2 divide-y divide-line">
-            {recent.map((r) => (
-              <li key={r.id}>
-                <Link href={`/r/${r.id}`} className="flex min-h-12 items-center gap-2 font-semibold">
-                  <span className="min-w-0 flex-1 truncate">{r.name}</span>
-                  <ChevronRight className="size-4 text-ink-faint" aria-hidden />
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
 
       <Link href="/demo" className="flex min-h-12 items-center justify-center gap-2 text-sm font-semibold text-ink-soft hover:text-ink">
         <FlaskConical className="size-4" aria-hidden /> 가상 친구들이 있는 데모 모임으로 둘러보기

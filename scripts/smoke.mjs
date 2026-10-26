@@ -66,9 +66,39 @@ const cand = (name, patch = {}) => ({
 const host = new Client("host");
 const alice = new Client("alice");
 const bob = new Client("bob");
-const stranger = new Client("stranger");
+const stranger = new Client("stranger"); // 로그인하지 않은 사람
+const carol = new Client("carol"); // 로그인했지만 모임 참가자가 아닌 사람
 
 console.log(`smoke test → ${BASE}`);
+
+// 화면·모임 생성·참여는 로그인해야 쓸 수 있으므로 참가자들은 먼저 가입한다
+const runId = Date.now().toString(36);
+const PASSWORD = "password123";
+for (const c of [host, alice, bob, carol]) {
+  const r = await c.req("/api/auth/signup", { username: `s${runId}_${c.name}`, password: PASSWORD });
+  assert.equal(r.status, 200, `${c.name} 가입 실패`);
+}
+
+await check("로그인하지 않으면 화면은 로그인 창으로, 모임 생성·참여 API는 401", async () => {
+  for (const path of ["/", "/new", "/join/ABCDEF"]) {
+    const res = await fetch(BASE + path, { redirect: "manual" });
+    assert.ok([302, 303, 307, 308].includes(res.status), `${path} → ${res.status}`);
+    const location = new URL(res.headers.get("location"), BASE);
+    assert.equal(location.pathname, "/login");
+    if (path !== "/") assert.equal(location.searchParams.get("next"), path);
+  }
+  assert.equal((await fetch(BASE + "/login", { redirect: "manual" })).status, 200);
+  const r = await stranger.req("/api/rooms", { name: "x", tripStart: "2026-11-07", tripEnd: null, cards: [{ title: "a", category: "meal" }], host: profile("a") });
+  assert.equal(r.status, 401);
+  assert.equal(r.data.code, "LOGIN_REQUIRED");
+  assert.equal((await stranger.req("/api/demo", profile("a"))).status, 401);
+});
+
+await check("로그인한 상태로 로그인 창에 가면 원래 가려던 곳으로", async () => {
+  const cookie = [...host.cookies].map(([k, v]) => `${k}=${v}`).join("; ");
+  const res = await fetch(BASE + "/login?next=%2Fnew", { redirect: "manual", headers: { cookie } });
+  assert.equal(new URL(res.headers.get("location"), BASE).pathname, "/new");
+});
 
 // ── 모임 생성·참여 ──
 const created = await host.req("/api/rooms", {
@@ -89,7 +119,7 @@ const code = created.data.inviteCode;
 await check("모임 생성 + 참여 쿠키 발급", () => {
   assert.equal(created.status, 200);
   assert.match(code, /^[2-9A-Z]{6}$/);
-  assert.equal(host.cookies.size, 1);
+  assert.ok(host.cookies.get(`edg_${created.data.roomId}`));
 });
 
 await check("잘못된 입력은 400 (종료일이 시작일보다 빠름)", async () => {
@@ -102,7 +132,8 @@ await check("유효하지 않은 초대 코드는 404", async () => {
   assert.equal(r.status, 404);
 });
 
-await check("초대 코드로 참여 (가입 없이)", async () => {
+await check("초대 코드로 참여 (로그인 필요)", async () => {
+  assert.equal((await stranger.req(`/api/invite/${code}/join`, profile("손님"))).status, 401);
   const preview = await alice.req(`/api/invite/${code.toLowerCase()}`);
   assert.equal(preview.data.name, "스모크 테스트 여행");
   assert.equal((await alice.req(`/api/invite/${code}/join`, profile("앨리스", "rabbit"))).status, 200);
@@ -110,7 +141,7 @@ await check("초대 코드로 참여 (가입 없이)", async () => {
 });
 
 await check("같은 닉네임은 거절", async () => {
-  const r = await stranger.req(`/api/invite/${code}/join`, profile("앨리스"));
+  const r = await carol.req(`/api/invite/${code}/join`, profile("앨리스"));
   assert.equal(r.status, 409);
 });
 
@@ -379,20 +410,17 @@ await check("새로고침(재조회) 후에도 확정 결과 유지", async () =
   assert.equal(again.cards[2].stage, "confirmed");
 });
 
-// ── 회원 계정 (선택) ──
-const uname = `smoke_${Date.now().toString(36)}`;
+// ── 회원 계정 ──
+const uname = `s${runId}_bob`;
 const bobPhone = new Client("bob-phone");
 
-await check("가입 형식 검사, 가입하면 이 브라우저로 참여한 모임이 계정에 연결", async () => {
-  assert.equal((await bob.req("/api/auth/signup", { username: "a!", password: "password123" })).status, 400);
-  assert.equal((await bob.req("/api/auth/signup", { username: uname, password: "short" })).status, 400);
-  const r = await bob.req("/api/auth/signup", { username: uname.toUpperCase(), password: "password123" });
-  assert.equal(r.status, 200);
-  assert.equal(r.data.user.username, uname); // 소문자로 저장
+await check("가입 형식 검사·중복 아이디 거절, 내 모임 목록에 참여한 모임 표시", async () => {
+  assert.equal((await stranger.req("/api/auth/signup", { username: "a!", password: PASSWORD })).status, 400);
+  assert.equal((await stranger.req("/api/auth/signup", { username: `s${runId}_new`, password: "short" })).status, 400);
+  assert.equal((await stranger.req("/api/auth/signup", { username: uname.toUpperCase(), password: PASSWORD })).status, 409); // 대소문자 무시
   const me = (await bob.req("/api/auth/me")).data;
   assert.equal(me.user.username, uname);
   assert.ok(me.rooms.some((x) => x.id === roomId && x.nickname === "밥"));
-  assert.equal((await stranger.req("/api/auth/signup", { username: uname, password: "password123" })).status, 409);
 });
 
 await check("다른 기기에서 로그인하면 같은 참가자로 모임에 들어감 (기존 기기도 계속 사용)", async () => {

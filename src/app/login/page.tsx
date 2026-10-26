@@ -1,10 +1,10 @@
 import { AuthForm } from "@/components/AuthForm";
-import { PageShell } from "@/components/PageShell";
+import { AuthShell } from "@/components/AuthShell";
 
 export default function LoginPage() {
   return (
-    <PageShell title="로그인" description="로그인하면 내 모임을 어느 기기에서나 이어서 볼 수 있어요.">
+    <AuthShell title="로그인" description="로그인하고 친구들과 여행을 정해요.">
       <AuthForm mode="login" />
-    </PageShell>
+    </AuthShell>
   );
 }

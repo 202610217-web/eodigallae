@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/Button";
 import { FieldError, Label, Segmented, TextInput } from "@/components/ui/Field";
 import { api } from "@/lib/client/api";
 import { cn } from "@/lib/client/cn";
-import { rememberRoom } from "@/lib/client/recent";
 import { CARD_PRESETS, CATEGORY_LABEL, LIMITS, type CardCategory } from "@/lib/domain/constants";
 import { createRoomSchema } from "@/lib/validation";
 
@@ -75,7 +74,6 @@ export function CreateRoomForm() {
     setSubmitting(true);
     try {
       const { roomId } = await api<{ roomId: string }>("/api/rooms", { body: parsed.data });
-      rememberRoom(roomId, parsed.data.name);
       router.push(`/r/${roomId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "모임을 만들지 못했어요.");

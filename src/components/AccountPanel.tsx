@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight, Crown, LogIn, LogOut, UserPlus, UserRound } from "lucide-react";
+import { ChevronRight, Crown, LogOut } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
@@ -20,7 +20,7 @@ interface Me {
   rooms: MyRoom[];
 }
 
-/** 홈 화면의 계정 영역. 로그인하지 않았으면 가입 안내, 로그인했으면 내 모임 목록을 보여준다. */
+/** 홈 화면의 계정 영역: 내 계정에 연결된 모임 목록과 로그아웃 */
 export function AccountPanel() {
   const [me, setMe] = useState<Me | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -35,32 +35,8 @@ export function AccountPanel() {
     };
   }, []);
 
-  if (!me) return null;
-
-  if (!me.user) {
-    return (
-      <section className="rounded-[var(--radius-card)] bg-white p-5">
-        <p className="flex items-center gap-2 font-bold">
-          <UserRound className="size-4 text-ink-soft" aria-hidden /> 다른 기기에서도 이어서 하려면
-        </p>
-        <p className="mt-1 text-sm text-ink-soft">가입은 선택이에요. 로그인하면 내 모임 목록이 생기고, 휴대폰·PC 어디서든 같은 참가자로 들어올 수 있어요.</p>
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <Link
-            href="/login"
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-line bg-white px-4 font-semibold text-ink transition-colors hover:bg-cream"
-          >
-            <LogIn className="size-4" aria-hidden /> 로그인
-          </Link>
-          <Link
-            href="/signup"
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-coral-strong px-4 font-semibold text-white transition-colors hover:bg-[#d84a33]"
-          >
-            <UserPlus className="size-4" aria-hidden /> 회원가입
-          </Link>
-        </div>
-      </section>
-    );
-  }
+  // 홈은 로그인해야 들어올 수 있으므로 로그인 정보가 없으면(세션 만료 등) 아무것도 그리지 않는다
+  if (!me?.user) return null;
 
   const logout = async () => {
     setLoggingOut(true);

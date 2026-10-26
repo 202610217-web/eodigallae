@@ -1,8 +1,8 @@
 "use client";
 
-import { ArrowRight, FlaskConical, Home, KeyRound, LogIn, RefreshCw } from "lucide-react";
+import { ArrowRight, FlaskConical, Home, KeyRound, RefreshCw } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { BottomActionBar } from "@/components/ui/BottomActionBar";
 import { Button } from "@/components/ui/Button";
@@ -27,7 +27,6 @@ export function RoomApp({ roomId }: { roomId: string }) {
 
 function RoomFallback({ loading, error, retry }: { loading: boolean; error: LoadError | null; retry: () => void }) {
   const router = useRouter();
-  const pathname = usePathname();
   const [code, setCode] = useState("");
   if (loading || !error) return <LoadingState label="모임 보드를 불러오는 중이에요" className="min-h-dvh" />;
   return (
@@ -37,26 +36,18 @@ function RoomFallback({ loading, error, retry }: { loading: boolean; error: Load
           title="아직 이 모임에 참여하지 않았어요"
           description="이 브라우저에서는 참여 기록이 없어요. 초대 코드를 입력하거나 친구에게 받은 초대 링크로 들어와주세요."
           action={
-            <div className="w-full">
-              <form
-                className="flex w-full gap-2"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (code.trim()) router.push(`/join/${encodeURIComponent(code.trim())}`);
-                }}
-              >
-                <TextInput aria-label="초대 코드" placeholder="초대 코드 6자리" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} />
-                <Button type="submit" size="lg" icon={<KeyRound className="size-4" aria-hidden />}>
-                  참여
-                </Button>
-              </form>
-              <Link
-                href={`/login?next=${encodeURIComponent(pathname)}`}
-                className="mt-3 inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-ink-soft hover:text-ink"
-              >
-                <LogIn className="size-4" aria-hidden /> 다른 기기에서 참여했다면 로그인
-              </Link>
-            </div>
+            <form
+              className="flex w-full gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (code.trim()) router.push(`/join/${encodeURIComponent(code.trim())}`);
+              }}
+            >
+              <TextInput aria-label="초대 코드" placeholder="초대 코드 6자리" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} />
+              <Button type="submit" size="lg" icon={<KeyRound className="size-4" aria-hidden />}>
+                참여
+              </Button>
+            </form>
           }
         />
       ) : (

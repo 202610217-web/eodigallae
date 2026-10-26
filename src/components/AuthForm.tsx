@@ -3,7 +3,7 @@
 import { LogIn, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { Button } from "@/components/ui/Button";
 import { FieldError, Label, TextInput } from "@/components/ui/Field";
 import { api } from "@/lib/client/api";
@@ -15,8 +15,12 @@ function nextPath(): string {
   return next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
 }
 
+const subscribeNothing = () => () => {};
+
 export function AuthForm({ mode }: { mode: "login" | "signup" }) {
   const router = useRouter();
+  // 로그인↔가입 화면을 오가도 초대 링크 등 돌아갈 주소(?next=)를 유지한다. 서버 렌더링에서는 빈 값.
+  const search = useSyncExternalStore(subscribeNothing, () => window.location.search, () => "");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -119,7 +123,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
 
       <p className="text-center text-sm text-ink-soft">
         {signup ? "이미 계정이 있나요? " : "아직 계정이 없나요? "}
-        <Link href={signup ? "/login" : "/signup"} className="font-semibold text-coral-strong underline-offset-2 hover:underline">
+        <Link href={`${signup ? "/login" : "/signup"}${search}`} className="font-semibold text-coral-strong underline-offset-2 hover:underline">
           {signup ? "로그인" : "회원가입"}
         </Link>
       </p>

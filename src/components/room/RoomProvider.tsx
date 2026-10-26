@@ -3,7 +3,6 @@
 import { CircleAlert, CircleCheck } from "lucide-react";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { api, ApiError } from "@/lib/client/api";
-import { rememberRoom } from "@/lib/client/recent";
 import type { RoomView } from "@/lib/domain/types";
 import type { RoomAction } from "@/lib/validation";
 
@@ -82,8 +81,6 @@ export function RoomProvider({
           toast("여행 계획이 하나 확정됐어요!");
           window.setTimeout(() => setJustConfirmed(null), 2000);
         }
-      } else {
-        rememberRoom(next.id, next.name);
       }
       prevView.current = next;
       setView(next);

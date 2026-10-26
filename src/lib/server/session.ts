@@ -63,7 +63,7 @@ export async function readAllMemberTokens(): Promise<{ roomId: string; token: st
 }
 
 // ───── 회원 로그인 세션 ─────
-const SESSION_COOKIE = "edg_session";
+export const SESSION_COOKIE = "edg_session";
 export const SESSION_MAX_AGE = 60 * 60 * 24 * 30; // 30일
 
 export async function setSessionCookie(token: string) {

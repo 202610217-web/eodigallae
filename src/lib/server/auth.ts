@@ -121,7 +121,18 @@ export async function logOut() {
 }
 
 export async function getCurrentUser(): Promise<SessionUser | null> {
-  const token = await readSessionToken();
+  return userFromSessionToken(await readSessionToken());
+}
+
+/** 로그인이 필요한 API에서 사용. 로그인하지 않았으면 401 */
+export async function requireUser(): Promise<SessionUser> {
+  const user = await getCurrentUser();
+  if (!user) throw new AppError(401, "로그인이 필요해요. 로그인한 뒤 다시 시도해주세요.", "LOGIN_REQUIRED");
+  return user;
+}
+
+/** 세션 토큰으로 사용자 조회 (만료된 세션은 무효). proxy에서도 쓴다. */
+export async function userFromSessionToken(token: string | null | undefined): Promise<SessionUser | null> {
   if (!token) return null;
   const db = await getDb();
   const rows = await db.query(

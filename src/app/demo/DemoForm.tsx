@@ -8,7 +8,6 @@ import { BottomActionBar } from "@/components/ui/BottomActionBar";
 import { Button } from "@/components/ui/Button";
 import { FieldError } from "@/components/ui/Field";
 import { api } from "@/lib/client/api";
-import { rememberRoom } from "@/lib/client/recent";
 import { profileSchema } from "@/lib/validation";
 
 export function DemoForm() {
@@ -27,7 +26,6 @@ export function DemoForm() {
     setSubmitting(true);
     try {
       const { roomId } = await api<{ roomId: string }>("/api/demo", { body: parsed.data });
-      rememberRoom(roomId, "부산 1박 2일 (데모)");
       router.push(`/r/${roomId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "데모 모임을 만들지 못했어요.");

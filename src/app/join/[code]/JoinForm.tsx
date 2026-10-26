@@ -12,7 +12,6 @@ import { FieldError } from "@/components/ui/Field";
 import { ErrorState, LoadingState } from "@/components/ui/States";
 import { api, ApiError } from "@/lib/client/api";
 import { formatTrip } from "@/lib/client/format";
-import { rememberRoom } from "@/lib/client/recent";
 import type { CharacterKey, ColorKey } from "@/lib/domain/constants";
 import { joinSchema } from "@/lib/validation";
 
@@ -74,7 +73,6 @@ export function JoinForm() {
     setSubmitting(true);
     try {
       const { roomId } = await api<{ roomId: string }>(`/api/invite/${encodeURIComponent(code)}/join`, { body: parsed.data });
-      rememberRoom(roomId, preview.name);
       router.push(`/r/${roomId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "참여하지 못했어요.");
