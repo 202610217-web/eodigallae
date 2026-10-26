@@ -51,7 +51,7 @@ export function colorHex(key: ColorKey): string {
 export type CardCategory = "meal" | "activity" | "stay";
 
 export const CARD_PRESETS: { key: string; title: string; category: CardCategory }[] = [
-  { key: "lunch", title: "토요일 점심", category: "meal" },
+  { key: "lunch", title: "점심 식사", category: "meal" },
   { key: "activity", title: "오후 활동", category: "activity" },
   { key: "dinner", title: "저녁 식사", category: "meal" },
   { key: "stay", title: "숙소", category: "stay" },

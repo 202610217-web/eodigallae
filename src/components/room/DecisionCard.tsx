@@ -1,7 +1,36 @@
 "use client";
 
-import { BedDouble, ChevronRight, CircleCheck, Lock, Ticket, UtensilsCrossed, type LucideIcon } from "lucide-react";
-import type { CSSProperties } from "react";
+import {
+  BedDouble,
+  Beer,
+  Bike,
+  CakeSlice,
+  Camera,
+  Car,
+  ChevronRight,
+  CircleCheck,
+  Coffee,
+  Cookie,
+  CookingPot,
+  Croissant,
+  Footprints,
+  Hotel,
+  Landmark,
+  Lock,
+  MoonStar,
+  Mountain,
+  ShoppingBag,
+  Soup,
+  Sun,
+  Sunrise,
+  Sunset,
+  Tent,
+  Ticket,
+  UtensilsCrossed,
+  Waves,
+  type LucideIcon,
+} from "lucide-react";
+import { createElement, type CSSProperties } from "react";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { cn } from "@/lib/client/cn";
 import { formatCost } from "@/lib/client/format";
@@ -16,6 +45,40 @@ export const CATEGORY_ICON: Record<CardCategory, LucideIcon> = {
   activity: Ticket,
   stay: BedDouble,
 };
+
+// 카드 제목에 들어간 단어로 아이콘을 고른다. 위에서부터 먼저 맞는 것을 쓰고, 없으면 종류별 기본 아이콘.
+const TITLE_ICONS: [RegExp, LucideIcon][] = [
+  [/술|맥주|포차|바$|펍|이자카야/, Beer],
+  [/카페|커피/, Coffee],
+  [/디저트|케이크|빵집/, CakeSlice],
+  [/간식/, Cookie],
+  [/아침|조식|브런치/, Croissant],
+  [/점심/, Soup],
+  [/저녁|야식/, CookingPot],
+  [/캠핑|글램핑/, Tent],
+  [/숙소|호텔|펜션|숙박/, Hotel],
+  [/바다|해변|수영|물놀이/, Waves],
+  [/등산|산행|트레킹/, Mountain],
+  [/쇼핑|시장/, ShoppingBag],
+  [/사진|포토/, Camera],
+  [/박물관|전시|관광|투어|명소/, Landmark],
+  [/자전거|라이딩/, Bike],
+  [/산책|걷기/, Footprints],
+  [/드라이브|이동/, Car],
+  [/일출|아침 활동/, Sunrise],
+  [/야경|밤/, MoonStar],
+  [/노을|일몰/, Sunset],
+  [/오후|낮/, Sun],
+];
+
+export function cardIcon(title: string, category: CardCategory): LucideIcon {
+  return TITLE_ICONS.find(([re]) => re.test(title))?.[1] ?? CATEGORY_ICON[category];
+}
+
+/** 제목에 맞는 결정 카드 아이콘 (장식용) */
+export function CardIcon({ title, category, className }: { title: string; category: CardCategory; className?: string }) {
+  return createElement(cardIcon(title, category), { className, "aria-hidden": true });
+}
 
 export function phaseText(card: DecisionCardView): string | null {
   if (card.stage !== "deciding" || !card.mode) return null;
@@ -44,7 +107,6 @@ export function phaseText(card: DecisionCardView): string | null {
 
 export function DecisionCard({ card, index, onOpen }: { card: DecisionCardView; index: number; onOpen: () => void }) {
   const { view, justConfirmed } = useRoom();
-  const Icon = CATEGORY_ICON[card.category];
   const ready = cardReadyCount(card);
   const total = view.members.length;
   const mine = myCondition(card, view.me.id);
@@ -65,7 +127,7 @@ export function DecisionCard({ card, index, onOpen }: { card: DecisionCardView; 
     >
       <div className="flex w-full items-start gap-3">
         <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-cream text-ink">
-          <Icon className="size-5" aria-hidden />
+          <CardIcon title={card.title} category={card.category} className="size-5" />
         </span>
         <div className="min-w-0 flex-1">
           <h3 className="flex items-center gap-1.5 text-lg font-bold leading-snug">

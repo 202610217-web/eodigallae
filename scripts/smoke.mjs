@@ -106,7 +106,7 @@ const created = await host.req("/api/rooms", {
   tripStart: "2026-11-07",
   tripEnd: "2026-11-08",
   cards: [
-    { title: "토요일 점심", category: "meal" },
+    { title: "점심 식사", category: "meal" },
     { title: "오후 활동", category: "activity" },
     { title: "저녁 식사", category: "meal" },
     { title: "숙소", category: "stay" },

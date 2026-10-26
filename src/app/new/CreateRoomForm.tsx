@@ -4,7 +4,7 @@ import { Check, Plus, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { DEFAULT_PROFILE, ProfileFields, type ProfileDraft } from "@/components/ProfileFields";
-import { CATEGORY_ICON } from "@/components/room/DecisionCard";
+import { CardIcon } from "@/components/room/DecisionCard";
 import { BottomActionBar } from "@/components/ui/BottomActionBar";
 import { Button } from "@/components/ui/Button";
 import { FieldError, Label, Segmented, TextInput } from "@/components/ui/Field";
@@ -110,7 +110,6 @@ export function CreateRoomForm() {
         <p className="mb-3 text-sm text-ink-soft">함께 정할 항목을 골라주세요. 카드마다 조건과 후보를 따로 모아요.</p>
         <ul className="space-y-2">
           {cards.map((c) => {
-            const Icon = CATEGORY_ICON[c.category];
             return (
               <li key={c.id} className="flex items-center gap-2">
                 <button
@@ -126,7 +125,7 @@ export function CreateRoomForm() {
                   <span className={cn("flex size-6 items-center justify-center rounded-md border-2", c.selected ? "border-coral-strong bg-coral-strong text-white" : "border-line")}>
                     {c.selected && <Check className="size-4" aria-hidden />}
                   </span>
-                  <Icon className="size-4 text-ink-soft" aria-hidden />
+                  <CardIcon title={c.title} category={c.category} className="size-4 text-ink-soft" />
                   <span className="min-w-0 flex-1 truncate font-semibold">{c.title}</span>
                   <span className="text-xs text-ink-soft">{CATEGORY_LABEL[c.category]}</span>
                 </button>

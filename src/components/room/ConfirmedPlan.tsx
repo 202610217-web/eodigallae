@@ -4,7 +4,7 @@ import { CalendarCheck, ExternalLink, Wallet } from "lucide-react";
 import { TasteTags } from "@/components/ui/TasteChip";
 import { formatCost, formatWon } from "@/lib/client/format";
 import { modeLabel } from "@/lib/domain/constants";
-import { CATEGORY_ICON } from "./DecisionCard";
+import { CardIcon } from "./DecisionCard";
 import { useRoom } from "./RoomProvider";
 
 /** 확정된 결정만 모아 보는 여행 보드 */
@@ -38,7 +38,6 @@ export function ConfirmedPlan({ onOpenCard }: { onOpenCard: (cardId: string) => 
           <ol className="mt-3 space-y-2">
             {confirmed.map((card) => {
               const r = card.result!;
-              const Icon = CATEGORY_ICON[card.category];
               return (
                 <li key={card.id} className={justConfirmed === card.id ? "animate-pop" : undefined}>
                   <button
@@ -47,7 +46,7 @@ export function ConfirmedPlan({ onOpenCard }: { onOpenCard: (cardId: string) => 
                     className="flex w-full gap-3 rounded-xl border border-line p-3 text-left hover:border-ink-faint"
                   >
                     <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-success text-success-ink">
-                      <Icon className="size-4" aria-hidden />
+                      <CardIcon title={card.title} category={card.category} className="size-4" />
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block text-xs font-semibold text-ink-soft">
