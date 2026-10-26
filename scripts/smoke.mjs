@@ -307,20 +307,22 @@ await check("쟁탈전: 준비 → 카운트다운 중 입력 무시 → 연타 
   assert.equal(bobView.filter((b) => b.taps !== null).length, 1); // 진행 중에는 내 횟수만 보임
 
   await sleep(3300);
-  // 앨리스: 0.5초마다 5번씩 (초당 10회, 정상 속도)
+  // 앨리스: 3초 동안 계속 묶음을 보낸다. DB 응답 지연으로 묶음 간격이 1초 가까이 벌어질 수 있어
+  // 묶음당 10회로 보내고, 서버가 경과 시간 기준 상한(초당 15회)으로 잘라 인정한다.
   const aliceLoop = (async () => {
-    for (let i = 0; i < 16; i++) {
-      await alice.act(roomId, { type: "battleTaps", cardId: activity, count: 5 });
-      await sleep(500);
+    const until = Date.now() + 3000;
+    while (Date.now() < until) {
+      await alice.act(roomId, { type: "battleTaps", cardId: activity, count: 10 });
+      await sleep(300);
     }
   })();
   // 밥: 1초 시점에 200번을 한꺼번에 보냄 → 상한으로 잘림
   await sleep(1000);
   await bob.act(roomId, { type: "battleTaps", cardId: activity, count: 200 });
   await aliceLoop;
-  // 서버 기준 종료 + 유예 시간(3s 카운트다운 + 10s + 1.5s)이 지날 때까지 대기
+  // 서버 기준 종료 + 유예 시간(3s 카운트다운 + 3s + 1.5s)이 지날 때까지 대기
   const running = (await host.state(roomId)).data;
-  const finalizeAt = running.cards[1].phaseStartedAt + 3000 + 10000 + 1500;
+  const finalizeAt = running.cards[1].phaseStartedAt + 3000 + 3000 + 1500;
   await sleep(Math.max(0, finalizeAt - running.serverNow) + 300);
   await bob.act(roomId, { type: "battleTaps", cardId: activity, count: 100 }); // 종료·유예 시간 이후 입력 → 무시
 
@@ -331,7 +333,7 @@ await check("쟁탈전: 준비 → 카운트다운 중 입력 무시 → 연타 
   const bobTaps = card.battle.find((b) => b.memberId === s.members.find((m) => m.nickname === "밥").id).taps;
   console.log(`    (앨리스 ${aliceTaps}회, 밥 ${bobTaps}회)`);
   assert.ok(bobTaps <= 15, "몰아서 보낸 입력은 최근 1초 분량만 인정");
-  assert.ok(aliceTaps >= 60 && aliceTaps <= 100);
+  assert.ok(aliceTaps > bobTaps && aliceTaps <= 45, "정상 속도로 3초간 누른 쪽이 이기고, 상한(초당 15회)을 넘지 않음");
   assert.equal(card.battleWinnerId, s.members.find((m) => m.nickname === "앨리스").id);
 });
 

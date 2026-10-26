@@ -6,14 +6,14 @@ import { useRoom } from "@/components/room/RoomProvider";
 import { Button } from "@/components/ui/Button";
 import { Notice } from "@/components/ui/States";
 import { cn } from "@/lib/client/cn";
-import type { DecisionMode } from "@/lib/domain/constants";
+import { BATTLE_TAP_MS, type DecisionMode } from "@/lib/domain/constants";
 import { isDecidable } from "@/lib/domain/evaluate";
 import type { DecisionCardView } from "@/lib/domain/types";
 
 export const MODE_INFO: Record<DecisionMode, { icon: LucideIcon; title: string; desc: string }> = {
   vote: { icon: Vote, title: "다수결", desc: "한 사람당 한 표. 마감 전에는 득표수를 숨기고, 동점이면 룰렛으로." },
   roulette: { icon: Dices, title: "운명의 룰렛", desc: "결정 대상 후보를 모두 같은 확률로 넣고 돌려요." },
-  battle: { icon: Hand, title: "결정권 쟁탈전", desc: "10초 연타 대결! 1등이 결정 대상 후보 중 하나를 골라요." },
+  battle: { icon: Hand, title: "결정권 쟁탈전", desc: `${BATTLE_TAP_MS / 1000}초 연타 대결! 1등이 결정 대상 후보 중 하나를 골라요.` },
 };
 
 export function DecisionModePicker({

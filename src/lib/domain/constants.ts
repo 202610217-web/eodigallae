@@ -111,7 +111,7 @@ export function modeLabel(mode: DecisionMode): string {
 
 // 결정권 쟁탈전 타이밍 (ms)
 export const BATTLE_COUNTDOWN_MS = 3_000;
-export const BATTLE_TAP_MS = 10_000;
+export const BATTLE_TAP_MS = 3_000;
 // 네트워크 지연으로 늦게 도착한 마지막 묶음만 받아주는 유예 시간
 export const BATTLE_GRACE_MS = 1_500;
 // 사람이 낼 수 있는 연타 속도 상한 (초당)
