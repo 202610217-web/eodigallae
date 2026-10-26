@@ -69,7 +69,7 @@ export function InviteSheet({ open, onClose }: { open: boolean; onClose: () => v
   };
 
   return (
-    <Sheet open={open} onClose={onClose} title="친구 초대하기" subtitle="링크나 코드만 있으면 가입 없이 바로 참여할 수 있어요.">
+    <Sheet open={open} onClose={onClose} title="친구 초대하기" subtitle="링크나 코드를 받은 친구는 로그인한 뒤 바로 참여할 수 있어요.">
       <div className="space-y-4">
         <div className="rounded-[var(--radius-card)] bg-white p-5 text-center">
           <p className="text-sm font-semibold text-ink-soft">초대 코드</p>

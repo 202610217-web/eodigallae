@@ -117,5 +117,7 @@ export const actionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("confirmResult"), cardId: id }),
   z.object({ type: z.literal("resetDecision"), cardId: id }),
   z.object({ type: z.literal("setLock"), cardId: id, locked: z.boolean() }),
+  z.object({ type: z.literal("transferHost"), memberId: id }),
+  z.object({ type: z.literal("kickMember"), memberId: id }),
 ]);
 export type RoomAction = z.infer<typeof actionSchema>;

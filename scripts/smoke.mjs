@@ -453,4 +453,37 @@ await check("로그아웃하면 그 기기의 계정 연결 참여 권한도 사
   assert.equal((await bob.state(roomId)).status, 200);
 });
 
+// ── 방장 넘기기 · 참가자 내보내기 ──
+const memberIdOf = (view, nickname) => view.members.find((m) => m.nickname === nickname).id;
+
+await check("방장 넘기기: 방장만, 자기 자신은 불가, 넘기면 권한이 옮겨감", async () => {
+  s = (await host.state(roomId)).data;
+  const aliceId = memberIdOf(s, "앨리스");
+  assert.equal((await bob.act(roomId, { type: "transferHost", memberId: aliceId })).status, 403);
+  assert.equal((await host.act(roomId, { type: "transferHost", memberId: s.me.id })).status, 400);
+  assert.equal((await host.act(roomId, { type: "transferHost", memberId: aliceId })).status, 200);
+  s = (await alice.state(roomId)).data;
+  assert.equal(s.me.isHost, true);
+  assert.equal(s.members.filter((m) => m.isHost).length, 1);
+  assert.equal((await host.act(roomId, { type: "setLock", cardId: stay, locked: true })).status, 403); // 이제 일반 참가자
+});
+
+await check("내보내기: 결정 중에는 불가, 내보낸 참가자는 모임에 접근 불가", async () => {
+  const bobId = memberIdOf(s, "밥");
+  assert.equal((await host.act(roomId, { type: "kickMember", memberId: bobId })).status, 403); // 방장 아님
+  assert.equal((await alice.act(roomId, { type: "kickMember", memberId: s.me.id })).status, 400); // 자기 자신
+  await alice.act(roomId, { type: "startDecision", cardId: lunch, mode: "roulette" });
+  const blocked = await alice.act(roomId, { type: "kickMember", memberId: bobId });
+  assert.equal(blocked.status, 409);
+  assert.equal(blocked.data.code, "DECIDING");
+  assert.equal((await alice.act(roomId, { type: "resetDecision", cardId: lunch })).status, 200);
+  assert.equal((await alice.act(roomId, { type: "confirmResult", cardId: activity })).status, 200); // 쟁탈전 결과 확정 대기도 결정 중
+  assert.equal((await alice.act(roomId, { type: "kickMember", memberId: bobId })).status, 200);
+  assert.equal((await bob.state(roomId)).status, 401);
+  assert.ok(!(await bob.req("/api/auth/me")).data.rooms.some((x) => x.id === roomId));
+  s = (await alice.state(roomId)).data;
+  assert.ok(!s.members.some((m) => m.nickname === "밥"));
+  assert.ok(s.cards[0].candidates.some((c) => c.name === "예산 초과 B"), "내보낸 사람이 올린 후보는 남음");
+});
+
 console.log(`\n${passed}개 검증 통과 (room ${roomId})`);

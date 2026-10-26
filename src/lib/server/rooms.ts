@@ -111,6 +111,7 @@ function mapMember(r: Row): Member {
     character: r.character as CharacterKey,
     color: r.color as ColorKey,
     isHost: Boolean(r.is_host),
+    isBot: r.token_hash === null && (r.user_id ?? null) === null,
     joinedAt: num(r.joined_at),
     taste: r.rank1 ? ([r.rank1, r.rank2, r.rank3] as TasteRanks) : null,
   };
@@ -938,5 +939,40 @@ export async function performAction(roomId: string, token: string | null, action
       await db.query("UPDATE decision_cards SET locked = $1, updated_at = $2 WHERE id = $3", [action.locked, now, card.id]);
       return;
     }
+
+    case "transferHost": {
+      requireHost(me);
+      const target = requireOtherMember(data, me, action.memberId);
+      if (target.isBot) throw new AppError(400, "가상 참가자에게는 방장을 넘길 수 없어요.");
+      // 한 문장으로 나와 상대의 방장 여부를 맞바꾼다. 그 사이 내가 방장이 아니게 됐으면 아무것도 바꾸지 않는다.
+      const rows = await db.query(
+        `UPDATE members SET is_host = (id = $3)
+         WHERE room_id = $1 AND id IN ($2, $3)
+           AND EXISTS (SELECT 1 FROM members WHERE id = $2 AND room_id = $1 AND is_host)
+         RETURNING id`,
+        [roomId, me.id, target.id],
+      );
+      if (rows.length !== 2) throw new AppError(409, "방장 정보가 바뀌었어요. 화면을 새로고침한 뒤 다시 시도해주세요.");
+      return;
+    }
+
+    case "kickMember": {
+      requireHost(me);
+      const target = requireOtherMember(data, me, action.memberId);
+      // 결정 중에 사람이 빠지면 투표 인원·쟁탈전 참가자가 어긋나므로 결정이 없을 때만 허용
+      if (data.cards.some((c) => c.stage === "deciding")) {
+        throw new AppError(409, "결정이 진행 중일 때는 내보낼 수 없어요. 결정을 마치거나 취소한 뒤 다시 시도해주세요.", "DECIDING");
+      }
+      // 취향·조건·투표 기록·추가 참여 토큰은 함께 삭제(ON DELETE CASCADE). 그 사람이 올린 후보는 남긴다.
+      await db.query("DELETE FROM members WHERE id = $1 AND room_id = $2 AND NOT is_host", [target.id, roomId]);
+      return;
+    }
   }
+}
+
+function requireOtherMember(data: RoomData, me: Member, memberId: string): Member {
+  const target = data.members.find((m) => m.id === memberId);
+  if (!target) throw new AppError(404, "참가자를 찾을 수 없어요. 이미 나간 참가자일 수 있어요.");
+  if (target.id === me.id) throw new AppError(400, "나 자신에게는 할 수 없는 작업이에요.");
+  return target;
 }

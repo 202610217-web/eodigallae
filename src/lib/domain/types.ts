@@ -16,6 +16,8 @@ export interface Member {
   character: CharacterKey;
   color: ColorKey;
   isHost: boolean;
+  /** 데모 모임의 가상 참가자 (참여 토큰도 계정도 없음). 방장을 넘겨받을 수 없다. */
+  isBot: boolean;
   joinedAt: number;
   taste: TasteRanks | null;
 }

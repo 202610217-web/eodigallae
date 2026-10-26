@@ -1,18 +1,20 @@
 "use client";
 
-import { CircleCheck, Crown, UserPlus } from "lucide-react";
+import { CircleCheck, Crown, Settings2, UserPlus } from "lucide-react";
 import { useState, type CSSProperties } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { Pill } from "@/components/ui/StatusBadge";
 import { memberProgress } from "@/lib/client/selectors";
 import { tasteTitle } from "@/lib/domain/evaluate";
+import { MemberManageSheet } from "./MemberManageSheet";
 import { InviteSheet } from "./RoomHeader";
 import { useRoom } from "./RoomProvider";
 
 export function MemberStatusList() {
   const { view } = useRoom();
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [manageOpen, setManageOpen] = useState(false);
   const progress = view.members.map((m) => ({ member: m, ...memberProgress(view, m) }));
   const readyCount = progress.filter((p) => p.ready).length;
   const alone = view.members.length < 2;
@@ -23,9 +25,16 @@ export function MemberStatusList() {
         <h2 id="members-title" className="text-lg font-bold">
           참가자 <span className="text-ink-faint">{view.members.length}</span>
         </h2>
-        <Pill tone={readyCount === view.members.length ? "success" : "neutral"} icon={<CircleCheck className="size-3.5" aria-hidden />}>
-          {readyCount}/{view.members.length}명 준비 완료
-        </Pill>
+        <div className="flex items-center gap-1">
+          <Pill tone={readyCount === view.members.length ? "success" : "neutral"} icon={<CircleCheck className="size-3.5" aria-hidden />}>
+            {readyCount}/{view.members.length}명 준비 완료
+          </Pill>
+          {view.me.isHost && !alone && (
+            <Button size="sm" variant="ghost" icon={<Settings2 className="size-3.5" aria-hidden />} onClick={() => setManageOpen(true)}>
+              관리
+            </Button>
+          )}
+        </div>
       </div>
 
       <ul className="flex gap-3 overflow-x-auto pb-1 lg:flex-col lg:gap-2 lg:overflow-visible">
@@ -70,6 +79,7 @@ export function MemberStatusList() {
         </div>
       )}
       <InviteSheet open={inviteOpen} onClose={() => setInviteOpen(false)} />
+      {view.me.isHost && <MemberManageSheet open={manageOpen} onClose={() => setManageOpen(false)} />}
     </section>
   );
 }
