@@ -66,7 +66,7 @@ export function CardBuilder({
       ) : (
         <ul className="space-y-3">
           {cards.map((c) => (
-            <li key={c.id} className="rounded-xl border border-coral-strong bg-coral-soft p-3">
+            <li key={c.id} className="rounded-xl border border-line bg-cream p-3">
               <div className="flex items-center gap-3">
                 <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-white text-ink">
                   {createElement(CARD_ICON_COMPONENT[c.icon], { className: "size-5", "aria-hidden": true })}
@@ -76,7 +76,7 @@ export function CardBuilder({
                 <button
                   type="button"
                   onClick={() => onChange(cards.filter((x) => x.id !== c.id))}
-                  className="-mr-1 flex size-9 shrink-0 items-center justify-center rounded-lg text-ink-soft hover:bg-white"
+                  className="-mr-1 flex size-9 shrink-0 items-center justify-center rounded-lg text-ink-soft hover:bg-cream-deep"
                   aria-label={`${c.title} 삭제`}
                 >
                   <X className="size-4" aria-hidden />
