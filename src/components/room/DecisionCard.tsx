@@ -33,7 +33,7 @@ import {
 import { createElement, type CSSProperties } from "react";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { cn } from "@/lib/client/cn";
-import { formatCost } from "@/lib/client/format";
+import { formatCost, formatSchedule } from "@/lib/client/format";
 import { cardReadyCount, myCondition } from "@/lib/client/selectors";
 import { modeLabel, type CardCategory } from "@/lib/domain/constants";
 import type { DecisionCardView } from "@/lib/domain/types";
@@ -133,8 +133,11 @@ export function DecisionCard({ card, index, onOpen }: { card: DecisionCardView; 
             <span className="truncate">{card.title}</span>
             {card.locked && <Lock className="size-4 shrink-0 text-ink-soft" aria-label="잠김" />}
           </h3>
-          <div className="mt-1">
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
             <StatusBadge status={card.status} />
+            {formatSchedule(card.day, card.time) && (
+              <span className="text-xs font-semibold text-ink-soft">{formatSchedule(card.day, card.time)}</span>
+            )}
           </div>
         </div>
         <ChevronRight className="mt-2 size-5 shrink-0 text-ink-faint transition-transform group-hover:translate-x-0.5" aria-hidden />

@@ -157,6 +157,10 @@ export interface DecisionCardView {
   title: string;
   category: CardCategory;
   sortOrder: number;
+  /** 몇 일차 (1부터), 정하지 않았으면 null */
+  day: number | null;
+  /** 시작 시각 "HH:MM", 정하지 않았으면 null */
+  time: string | null;
   stage: CardStage;
   status: CardDisplayStatus;
   mode: DecisionMode | null;

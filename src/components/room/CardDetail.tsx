@@ -1,18 +1,20 @@
 "use client";
 
-import { Lock, LockOpen } from "lucide-react";
+import { CalendarClock, Lock, LockOpen } from "lucide-react";
 import { useState } from "react";
 import { DecisionFlow } from "@/components/decision/DecisionFlow";
 import { Button } from "@/components/ui/Button";
 import { Sheet } from "@/components/ui/Sheet";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { cn } from "@/lib/client/cn";
+import { formatDayDate, formatSchedule, tripDayCount } from "@/lib/client/format";
 import { myCondition } from "@/lib/client/selectors";
 import { CATEGORY_LABEL } from "@/lib/domain/constants";
 import type { DecisionCardView } from "@/lib/domain/types";
 import { CandidateForm } from "./CandidateForm";
 import { CandidateList } from "./CandidateList";
 import { ConditionForm } from "./ConditionForm";
+import { ScheduleFields } from "./ScheduleFields";
 import { useRoom } from "./RoomProvider";
 
 export type DetailTab = "conditions" | "candidates" | "decision";
@@ -28,6 +30,60 @@ function lockReason(card: DecisionCardView): string | null {
   if (card.stage === "deciding") return "결정이 진행 중이라 후보와 조건이 잠겨 있어요.";
   if (card.locked) return "방장이 이 카드를 잠갔어요. 잠금이 풀리면 수정할 수 있어요.";
   return null;
+}
+
+/** 카드 일정 표시 + 방장은 바로 고칠 수 있다 (일정표 순서에 쓰임) */
+function CardSchedule({ card }: { card: DecisionCardView }) {
+  const { view, act } = useRoom();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState({ day: card.day, time: card.time });
+  const [saving, setSaving] = useState(false);
+  const dayCount = tripDayCount(view.tripStart, view.tripEnd);
+  const label = formatSchedule(card.day, card.time);
+  const dateText = card.day ? ` · ${formatDayDate(view.tripStart, card.day)}` : "";
+
+  if (editing) {
+    return (
+      <div className="mt-2 rounded-xl bg-white p-2">
+        <ScheduleFields idPrefix={`detail-${card.id}`} day={draft.day} time={draft.time} dayCount={dayCount} tripStart={view.tripStart} onChange={setDraft} />
+        <div className="mt-2 flex justify-end gap-2">
+          <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
+            취소
+          </Button>
+          <Button
+            size="sm"
+            loading={saving}
+            onClick={async () => {
+              setSaving(true);
+              if (await act({ type: "setCardSchedule", cardId: card.id, ...draft })) setEditing(false);
+              setSaving(false);
+            }}
+          >
+            저장
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <span className="mt-1.5 flex flex-wrap items-center gap-2 text-sm">
+      <CalendarClock className="size-4 text-ink-soft" aria-hidden />
+      <span className={label ? "font-semibold text-ink" : "text-ink-faint"}>{label ? `${label}${dateText}` : "일정 시간 미정"}</span>
+      {view.me.isHost && (
+        <button
+          type="button"
+          onClick={() => {
+            setDraft({ day: card.day, time: card.time });
+            setEditing(true);
+          }}
+          className="inline-flex min-h-9 items-center rounded-lg px-2 text-sm font-semibold text-coral-strong hover:bg-coral-soft"
+        >
+          시간 수정
+        </button>
+      )}
+    </span>
+  );
 }
 
 export function CardDetail({ card, initialTab, onClose }: { card: DecisionCardView; initialTab: DetailTab; onClose: () => void }) {
@@ -58,12 +114,15 @@ export function CardDetail({ card, initialTab, onClose }: { card: DecisionCardVi
       size="wide"
       title={card.title}
       subtitle={
-        <span className="flex flex-wrap items-center gap-2">
-          <StatusBadge status={card.status} />
-          <span>
-            {CATEGORY_LABEL[card.category]} · 후보 {card.candidates.length}개 · 통과 {passCount}개
+        <div>
+          <span className="flex flex-wrap items-center gap-2">
+            <StatusBadge status={card.status} />
+            <span>
+              {CATEGORY_LABEL[card.category]} · 후보 {card.candidates.length}개 · 통과 {passCount}개
+            </span>
           </span>
-        </span>
+          <CardSchedule card={card} />
+        </div>
       }
       headerExtra={
         view.me.isHost && card.stage === "open" ? (

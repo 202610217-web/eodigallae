@@ -14,6 +14,16 @@ const dateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "날짜 형식이 올바
 const tasteKey = z.enum(TASTE_KEYS);
 const id = z.string().min(1).max(64);
 
+// 결정 카드 일정 (몇 일차 · 시작 시각). 둘 다 비워 둘 수 있다.
+const cardSchedule = {
+  day: z.number().int().min(1, "일차를 다시 골라주세요.").max(30, "일차를 다시 골라주세요.").nullable().default(null),
+  time: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "시간 형식이 올바르지 않아요.")
+    .nullable()
+    .default(null),
+};
+
 export const profileSchema = z.object({
   nickname,
   character: z.enum(CHARACTER_KEYS),
@@ -30,6 +40,7 @@ export const createRoomSchema = z
         z.object({
           title: trimmed(20, "결정 카드 이름").min(1, "결정 카드 이름을 입력해주세요."),
           category: z.enum(["meal", "activity", "stay"]),
+          ...cardSchedule,
         }),
       )
       .min(1, "결정 카드를 하나 이상 골라주세요.")
@@ -132,6 +143,7 @@ export const actionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("confirmResult"), cardId: id }),
   z.object({ type: z.literal("resetDecision"), cardId: id }),
   z.object({ type: z.literal("setLock"), cardId: id, locked: z.boolean() }),
+  z.object({ type: z.literal("setCardSchedule"), cardId: id, ...cardSchedule }),
   z.object({ type: z.literal("transferHost"), memberId: id }),
   z.object({ type: z.literal("kickMember"), memberId: id }),
 ]);

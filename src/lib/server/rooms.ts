@@ -11,6 +11,7 @@ import {
   type SettingKey,
   type TasteKey,
   type VibeKey,
+  guessCardTime,
 } from "@/lib/domain/constants";
 import { battleWindow, acceptedTaps, pickUniform, rankBattle, tallyVotes } from "@/lib/domain/decide";
 import { cardDisplayStatus, decisionPool, evaluateCandidates } from "@/lib/domain/evaluate";
@@ -53,6 +54,8 @@ interface CardRow {
   title: string;
   category: CardCategory;
   sortOrder: number;
+  day: number | null;
+  time: string | null;
   stage: CardStage;
   mode: DecisionMode | null;
   phase: CardPhase | null;
@@ -124,6 +127,8 @@ function mapCard(r: Row): CardRow {
     title: str(r.title),
     category: r.category as CardCategory,
     sortOrder: num(r.sort_order),
+    day: optNum(r.day),
+    time: (r.start_time as string | null) ?? null,
     stage: r.stage as CardStage,
     mode: (r.mode as DecisionMode | null) ?? null,
     phase: (r.phase as CardPhase | null) ?? null,
@@ -279,6 +284,8 @@ function buildView(data: RoomData, now: number, storage: Db["kind"]): RoomView {
       title: card.title,
       category: card.category,
       sortOrder: card.sortOrder,
+      day: card.day,
+      time: card.time,
       stage: card.stage,
       status: cardDisplayStatus(card.stage, data.members, conditions),
       mode: card.mode,
@@ -372,7 +379,7 @@ export async function createRoom(input: {
   name: string;
   tripStart: string;
   tripEnd: string | null;
-  cards: { title: string; category: CardCategory }[];
+  cards: { title: string; category: CardCategory; day?: number | null; time?: string | null }[];
   host: Profile;
   isDemo?: boolean;
   /** 로그인한 상태면 방장 참가자를 계정에 연결 */
@@ -399,9 +406,10 @@ export async function createRoom(input: {
           params: [memberId, roomId, input.host.nickname, input.host.character, input.host.color, hashToken(token), now, input.userId ?? null],
         },
         ...input.cards.map((c, i) => ({
-          text: `INSERT INTO decision_cards (id, room_id, title, category, sort_order, updated_at)
-                 VALUES ($1, $2, $3, $4, $5, $6)`,
-          params: [newId("card"), roomId, c.title, c.category, i, now],
+          text: `INSERT INTO decision_cards (id, room_id, title, category, sort_order, day, start_time, updated_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          // 일정을 보내지 않으면(데모 등) 1일차 + 제목으로 추측한 시간
+          params: [newId("card"), roomId, c.title, c.category, i, c.day ?? 1, c.time === undefined ? guessCardTime(c.title) : c.time, now],
         })),
       ]);
       return { roomId, token, memberId, inviteCode };
@@ -952,6 +960,13 @@ export async function performAction(roomId: string, token: string | null, action
       requireHost(me);
       const card = requireCard(data, action.cardId);
       await db.query("UPDATE decision_cards SET locked = $1, updated_at = $2 WHERE id = $3", [action.locked, now, card.id]);
+      return;
+    }
+
+    case "setCardSchedule": {
+      requireHost(me);
+      const card = requireCard(data, action.cardId);
+      await db.query("UPDATE decision_cards SET day = $1, start_time = $2, updated_at = $3 WHERE id = $4", [action.day, action.time, now, card.id]);
       return;
     }
 

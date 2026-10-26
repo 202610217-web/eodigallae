@@ -400,6 +400,17 @@ await check("결정 대상 후보가 없으면 결정 시작 차단", async () =
   assert.equal(r.data.code, "NO_ELIGIBLE");
 });
 
+await check("카드 일정(일차·시간): 방장만 수정, 형식 검사, 상태에 반영", async () => {
+  assert.equal((await alice.act(roomId, { type: "setCardSchedule", cardId: stay, day: 1, time: "15:00" })).status, 403);
+  assert.equal((await host.act(roomId, { type: "setCardSchedule", cardId: stay, day: 1, time: "25:00" })).status, 400);
+  assert.equal((await host.act(roomId, { type: "setCardSchedule", cardId: stay, day: 2, time: "15:00" })).status, 200);
+  const card = (await bob.state(roomId)).data.cards[3];
+  assert.equal(card.day, 2);
+  assert.equal(card.time, "15:00");
+  assert.equal((await host.act(roomId, { type: "setCardSchedule", cardId: stay, day: null, time: null })).status, 200);
+  assert.equal((await bob.state(roomId)).data.cards[3].time, null);
+});
+
 await check("방장 잠금 → 수정 차단, 해제 후 가능", async () => {
   await host.act(roomId, { type: "setLock", cardId: stay, locked: true });
   assert.equal((await bob.act(roomId, cond(stay))).status, 409);

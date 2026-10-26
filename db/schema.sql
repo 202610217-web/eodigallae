@@ -159,3 +159,6 @@ CREATE TABLE IF NOT EXISTS member_tokens (
 CREATE INDEX IF NOT EXISTS member_tokens_member_idx ON member_tokens(member_id);
 -- 후보의 '기타' 입력 내용 (비용·특징·실내/야외·분위기). 예: {"cost": "메뉴마다 달라요"}
 ALTER TABLE candidates ADD COLUMN IF NOT EXISTS notes jsonb NOT NULL DEFAULT '{}'::jsonb;
+-- 결정 카드 일정: 몇 일차(1부터) · 시작 시각(HH:MM). 비어 있으면 일정표에서 맨 뒤로
+ALTER TABLE decision_cards ADD COLUMN IF NOT EXISTS day integer;
+ALTER TABLE decision_cards ADD COLUMN IF NOT EXISTS start_time text;

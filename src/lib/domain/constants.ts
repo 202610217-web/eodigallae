@@ -50,6 +50,22 @@ export function colorHex(key: ColorKey): string {
 // 결정 카드 종류. 종류마다 필수 제외 조건 목록이 다르다.
 export type CardCategory = "meal" | "activity" | "stay";
 
+/** 카드 제목의 시간대 단어로 시작 시각을 추측한다 (모임 만들 때 기본값). 없으면 null */
+export function guessCardTime(title: string): string | null {
+  const rules: [RegExp, string][] = [
+    [/아침|조식/, "09:00"],
+    [/브런치/, "10:30"],
+    [/점심/, "12:00"],
+    [/오전/, "10:00"],
+    [/카페|디저트/, "15:00"],
+    [/오후|낮/, "14:00"],
+    [/저녁/, "18:00"],
+    [/야식|밤|야경|술/, "21:00"],
+    [/숙소|체크인|호텔|펜션/, "15:00"],
+  ];
+  return rules.find(([re]) => re.test(title))?.[1] ?? null;
+}
+
 export const CARD_PRESETS: { key: string; title: string; category: CardCategory }[] = [
   { key: "lunch", title: "점심 식사", category: "meal" },
   { key: "activity", title: "오후 활동", category: "activity" },
