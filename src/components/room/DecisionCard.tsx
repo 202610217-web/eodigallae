@@ -28,7 +28,7 @@ import {
   Waves,
   type LucideIcon,
 } from "lucide-react";
-import { createElement, type CSSProperties } from "react";
+import { createElement, useId, type CSSProperties } from "react";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { cn } from "@/lib/client/cn";
 import { formatCost, formatSchedule } from "@/lib/client/format";
@@ -167,18 +167,16 @@ export function DecisionCard({ card, index, onOpen }: { card: DecisionCardView; 
             </button>
             {card.locked && <Lock className="size-4 shrink-0 text-ink-soft" role="img" aria-label="잠김" />}
           </h3>
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+          <div id={`${statusId}-status`} className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
             <StatusBadge status={card.status} />
-            {formatSchedule(card.day, card.time) && (
-              <span className="text-xs font-semibold text-ink-soft">{formatSchedule(card.day, card.time)}</span>
-            )}
+            {schedule && <span className="text-xs font-semibold text-ink-soft tabular-nums">{schedule}</span>}
           </div>
         </div>
         <ChevronRight className="mt-2 size-5 shrink-0 text-ink-faint transition-transform group-hover:translate-x-0.5" aria-hidden />
       </div>
 
       {confirmed && card.result ? (
-        <div className="mt-4 rounded-xl bg-success px-3 py-2.5">
+        <div id={`${statusId}-detail`} className="mt-4 rounded-xl bg-success px-3 py-2.5">
           <p className="flex items-center gap-1.5 text-xs font-bold text-success-ink">
             <CircleCheck className="size-3.5" aria-hidden />
             확정 · {modeLabel(card.result.mode)}
@@ -191,33 +189,32 @@ export function DecisionCard({ card, index, onOpen }: { card: DecisionCardView; 
           <dl className="mt-4 grid grid-cols-2 gap-2 text-sm">
             <div className="rounded-xl bg-cream px-3 py-2">
               <dt className="text-xs text-ink-soft">후보</dt>
-              <dd className="font-bold">
+              <dd className="font-bold tabular-nums">
                 {card.candidates.length}개
-                {card.candidates.length > 0 && <span className="font-medium text-ink-soft"> · 통과 {passCount}</span>}
+                {/* 조건이 다 모이기 전에는 모든 후보가 '확인 필요'라 통과 수가 의미 없다 */}
+                {card.candidates.length > 0 && ready === total && (
+                  <span className="font-medium text-ink-soft"> · 통과 {passCount}</span>
+                )}
               </dd>
             </div>
             <div className="rounded-xl bg-cream px-3 py-2">
               <dt className="text-xs text-ink-soft">조건 입력</dt>
-              <dd className="font-bold">
+              <dd className="font-bold tabular-nums">
                 {ready}/{total}명 준비 완료
               </dd>
+              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-cream-deep" aria-hidden>
+                <div className="h-full rounded-full bg-coral transition-[width] duration-500" style={{ width: `${total ? (ready / total) * 100 : 0}%` }} />
+              </div>
             </div>
           </dl>
-          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-cream-deep" aria-hidden>
-            <div className="h-full rounded-full bg-coral transition-[width] duration-500" style={{ width: `${total ? (ready / total) * 100 : 0}%` }} />
-          </div>
-          <p className="mt-3 text-sm font-medium text-ink-soft">
-            {phaseText(card) ??
-              (card.stage === "open" && !mine?.ready
-                ? card.locked
-                  ? "방장이 잠근 카드예요"
-                  : "내 조건을 입력해주세요"
-                : card.candidates.length === 0
-                  ? "첫 번째 후보를 등록해주세요."
-                  : "후보를 비교하고 결정 방식을 골라요")}
+          <p
+            id={`${statusId}-detail`}
+            className={cn("mt-3 text-sm", step.action ? "font-bold text-[#b9412c]" : "font-medium text-ink-soft")}
+          >
+            {step.text}
           </p>
         </>
       )}
-    </button>
+    </article>
   );
 }
