@@ -20,6 +20,18 @@ export function newInviteCode(): string {
   return code;
 }
 
+/** 비밀번호 재설정용 복구 코드: 헷갈리지 않는 글자 16자를 4자씩 끊어 보여준다 (예: K7QX-M2PA-9RTW-H3ND) */
+export function newRecoveryCode(): string {
+  let code = "";
+  for (let i = 0; i < 16; i++) code += CODE_ALPHABET[randomInt(CODE_ALPHABET.length)];
+  return code.match(/.{4}/g)!.join("-");
+}
+
+/** 입력한 복구 코드를 비교용으로 정리 (대소문자·띄어쓰기·하이픈 무시) */
+export function normalizeRecoveryCode(raw: string): string {
+  return raw.toUpperCase().replace(/[^0-9A-Z]/g, "");
+}
+
 export function normalizeInviteCode(raw: string): string {
   return raw.trim().toUpperCase().replace(/[^0-9A-Z]/g, "");
 }

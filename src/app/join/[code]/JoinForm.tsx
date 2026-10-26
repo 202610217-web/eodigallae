@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { DEFAULT_PROFILE, ProfileFields, type ProfileDraft } from "@/components/ProfileFields";
+import { usePrefillProfile } from "@/components/account/useAccount";
 import { Avatar } from "@/components/ui/Avatar";
 import { BottomActionBar } from "@/components/ui/BottomActionBar";
 import { Button } from "@/components/ui/Button";
@@ -30,6 +31,7 @@ export function JoinForm() {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [profile, setProfile] = useState<ProfileDraft>(DEFAULT_PROFILE);
+  usePrefillProfile(setProfile);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 

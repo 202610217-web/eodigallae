@@ -6,7 +6,8 @@ import { SESSION_COOKIE } from "@/lib/server/session";
 // 로그인 후 원래 가려던 주소(초대 링크 등)로 돌아오게 next를 붙인다.
 // API는 여기서 막지 않고 각 라우트가 직접 검사한다(모임 생성·참여는 requireUser).
 
-const AUTH_PAGES = ["/login", "/signup"];
+// 비밀번호 재설정은 로그인하지 못하는 사람이 쓰는 화면이라 로그인 없이 열린다
+const AUTH_PAGES = ["/login", "/signup", "/reset-password"];
 
 export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;

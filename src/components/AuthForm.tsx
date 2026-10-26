@@ -121,6 +121,13 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
         {signup ? "가입하기" : "로그인"}
       </Button>
 
+      {!signup && (
+        <p className="text-center text-sm">
+          <Link href={`/reset-password${search}`} className="font-semibold text-ink-soft underline-offset-2 hover:text-ink hover:underline">
+            비밀번호를 잊으셨나요?
+          </Link>
+        </p>
+      )}
       <p className="text-center text-sm text-ink-soft">
         {signup ? "이미 계정이 있나요? " : "아직 계정이 없나요? "}
         <Link href={`${signup ? "/login" : "/signup"}${search}`} className="font-semibold text-coral-strong underline-offset-2 hover:underline">

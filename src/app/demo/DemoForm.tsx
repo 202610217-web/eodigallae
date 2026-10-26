@@ -4,6 +4,7 @@ import { FlaskConical } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { DEFAULT_PROFILE, ProfileFields, type ProfileDraft } from "@/components/ProfileFields";
+import { usePrefillProfile } from "@/components/account/useAccount";
 import { BottomActionBar } from "@/components/ui/BottomActionBar";
 import { Button } from "@/components/ui/Button";
 import { FieldError } from "@/components/ui/Field";
@@ -13,6 +14,7 @@ import { profileSchema } from "@/lib/validation";
 export function DemoForm() {
   const router = useRouter();
   const [profile, setProfile] = useState<ProfileDraft>(DEFAULT_PROFILE);
+  usePrefillProfile(setProfile);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 

@@ -3,6 +3,7 @@
 import { CalendarDays, Check, Copy, MapPin, Share2 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
+import { ProfileMenu } from "@/components/account/ProfileMenu";
 import { Button } from "@/components/ui/Button";
 import { Sheet } from "@/components/ui/Sheet";
 import { formatTrip, formatTripLength } from "@/lib/client/format";
@@ -72,6 +73,7 @@ export function RoomHeader() {
           >
             <Share2 className="size-4" aria-hidden />
           </button>
+          <ProfileMenu compact />
         </div>
       </div>
       <InviteSheet open={inviteOpen} onClose={() => setInviteOpen(false)} />

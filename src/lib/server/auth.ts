@@ -32,14 +32,14 @@ function scryptAsync(password: string, salt: Buffer, keylen: number, opts: Scryp
   return new Promise((resolve, reject) => scrypt(password, salt, keylen, opts, (err, key) => (err ? reject(err) : resolve(key))));
 }
 
-async function hashPassword(password: string): Promise<string> {
+export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16);
   const { N, r, p, keylen } = SCRYPT;
   const key = await scryptAsync(password, salt, keylen, { N, r, p });
   return `scrypt$${N}$${r}$${p}$${salt.toString("base64url")}$${key.toString("base64url")}`;
 }
 
-async function verifyPassword(password: string, stored: string): Promise<boolean> {
+export async function verifyPassword(password: string, stored: string): Promise<boolean> {
   const [algo, n, r, p, salt, hash] = stored.split("$");
   if (algo !== "scrypt" || !salt || !hash) return false;
   const expected = Buffer.from(hash, "base64url");
@@ -85,7 +85,7 @@ export async function logIn(username: string, password: string): Promise<Session
   return { id: String(user.id), username: String(user.username) };
 }
 
-async function startSession(userId: string) {
+export async function startSession(userId: string) {
   const db = await getDb();
   const token = newToken();
   const now = Date.now();

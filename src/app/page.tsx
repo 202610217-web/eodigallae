@@ -1,4 +1,5 @@
 import { AccountPanel } from "@/components/AccountPanel";
+import { ProfileMenu } from "@/components/account/ProfileMenu";
 import { Logo } from "@/components/room/RoomHeader";
 import { HomeActions } from "./HomeActions";
 
@@ -6,6 +7,10 @@ import { HomeActions } from "./HomeActions";
 export default function HomePage() {
   return (
     <main className="mx-auto grid w-full max-w-md flex-1 content-start gap-8 px-4 pt-10 pb-8 md:max-w-lg md:pt-16 lg:max-w-5xl lg:grid-cols-2 lg:gap-12">
+      {/* 오른쪽 위 프로필 메뉴 (넓은 화면에서는 두 칸 위에 걸쳐 놓인다) */}
+      <div className="-mb-6 flex justify-end lg:col-span-2 lg:-mb-10">
+        <ProfileMenu />
+      </div>
       <div>
         <div className="mb-8">
           <Logo />

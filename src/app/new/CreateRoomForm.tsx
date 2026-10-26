@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { DEFAULT_PROFILE, ProfileFields, type ProfileDraft } from "@/components/ProfileFields";
+import { usePrefillProfile } from "@/components/account/useAccount";
 import { BottomActionBar } from "@/components/ui/BottomActionBar";
 import { Button } from "@/components/ui/Button";
 import { FieldError, Label, TextInput } from "@/components/ui/Field";
@@ -33,6 +34,7 @@ export function CreateRoomForm() {
   const [cards, setCards] = useState<CardDraft[]>([]);
   const dayCount = tripDayCount(tripStart, tripEnd || null);
   const [profile, setProfile] = useState<ProfileDraft>(DEFAULT_PROFILE);
+  usePrefillProfile(setProfile);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 

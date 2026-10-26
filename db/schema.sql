@@ -173,4 +173,9 @@ CREATE TABLE IF NOT EXISTS marble_races (
   starts_at       double precision NOT NULL,     -- 서버 시각 기준 출발 (카운트다운 뒤)
   ends_at         double precision NOT NULL,     -- 재생이 끝나 결과를 공개하는 시각
   PRIMARY KEY (card_id, round)
-);
+);-- 프로필: 모임을 만들거나 참여할 때 미리 채워 줄 기본 닉네임·캐릭터·색 (비어 있으면 아이디와 기본 캐릭터)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS nickname text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS character text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS color text;
+-- 비밀번호 재설정용 복구 코드의 해시 (원문은 만들 때 한 번만 보여주고 저장하지 않음). 한 번 쓰면 지운다
+ALTER TABLE users ADD COLUMN IF NOT EXISTS recovery_hash text;

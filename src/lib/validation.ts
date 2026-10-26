@@ -59,16 +59,24 @@ export const createRoomSchema = z
 export const joinSchema = profileSchema;
 
 // 회원 계정: 아이디는 소문자로 정규화해 저장한다
-export const authSchema = z.object({
-  username: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .regex(/^[a-z0-9_]{4,20}$/, "아이디는 영문 소문자·숫자·밑줄(_)로 4~20자 입력해주세요."),
-  password: z
-    .string()
-    .min(8, "비밀번호는 8자 이상 입력해주세요.")
-    .max(100, "비밀번호는 100자 이내로 입력해주세요."),
+const username = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(/^[a-z0-9_]{4,20}$/, "아이디는 영문 소문자·숫자·밑줄(_)로 4~20자 입력해주세요.");
+const newPassword = z.string().min(8, "비밀번호는 8자 이상 입력해주세요.").max(100, "비밀번호는 100자 이내로 입력해주세요.");
+const currentPassword = z.string().min(1, "현재 비밀번호를 입력해주세요.").max(100, "비밀번호가 올바르지 않아요.");
+
+export const authSchema = z.object({ username, password: newPassword });
+
+// ───── 계정 설정 ─────
+export const changeUsernameSchema = z.object({ username, password: currentPassword });
+export const changePasswordSchema = z.object({ currentPassword, newPassword });
+export const passwordConfirmSchema = z.object({ password: currentPassword });
+export const resetPasswordSchema = z.object({
+  username,
+  recoveryCode: z.string().trim().min(1, "복구 코드를 입력해주세요.").max(40, "복구 코드를 다시 확인해주세요."),
+  newPassword,
 });
 
 const money = z
