@@ -9,7 +9,7 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { cn } from "@/lib/client/cn";
 import { cardSubmittedCount, hasSubmittedOpinion } from "@/lib/client/selectors";
 import { formatDayDate, formatSchedule, tripDayCount } from "@/lib/client/format";
-import { CATEGORY_LABEL, guessCardIcon, isCardIconKey, type CardIconKey } from "@/lib/domain/constants";
+import { guessCardIcon, isCardIconKey, type CardIconKey } from "@/lib/domain/constants";
 import type { DecisionCardView } from "@/lib/domain/types";
 import { CandidateForm } from "./CandidateForm";
 import { CandidateList } from "./CandidateList";
@@ -158,7 +158,7 @@ export function CardDetail({ card, initialTab, onClose }: { card: DecisionCardVi
           <span className="flex flex-wrap items-center gap-2">
             <StatusBadge status={card.status} />
             <span>
-              {CATEGORY_LABEL[card.category]} · 후보 {card.candidates.length}개 · 의견 {submittedCount}/{view.members.length}명
+              후보 {card.candidates.length}개 · 의견 {submittedCount}/{view.members.length}명
             </span>
           </span>
           <CardSchedule card={card} />

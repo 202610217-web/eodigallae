@@ -57,8 +57,8 @@ export const createRoomSchema = z
         z
           .object({
             title: trimmed(20, "결정 카드 이름").min(1, "결정 카드 이름을 입력해주세요."),
-            // 아이콘은 장식이고, 종류(일정표에서 숙소를 따로 보여줄 때 씀)는 따로 고른다.
-            // 종류 없이 아이콘만 보내는 이전 화면은 아이콘 묶음으로 종류를 정한다.
+            // 아이콘은 장식이다. 종류(일정표에서 숙소를 따로 보여줄 때 씀)는 화면에서 고르지 않고
+            // 아이콘 묶음으로 정한다. category를 직접 보내면 그 값을 쓴다.
             icon: iconKey.nullable().default(null),
             category: z.enum(CARD_CATEGORIES).optional(),
             // 방장이 모임을 만들 때 정한 이 카드의 의견 투표 질문 (비워 두고 나중에 모임 안에서 추가해도 된다)

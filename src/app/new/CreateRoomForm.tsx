@@ -47,10 +47,9 @@ export function CreateRoomForm() {
       tripStart,
       tripEnd: tripEnd || null,
       // 여행 기간을 줄였으면 범위를 벗어난 일차는 마지막 날로 맞춘다
-      cards: cards.map(({ title, icon, category, day, time, questions }) => ({
+      cards: cards.map(({ title, icon, day, time, questions }) => ({
         title,
         icon,
-        category,
         day: day === null ? null : Math.min(day, dayCount),
         time,
         questions: toQuestionInputs(questions),
