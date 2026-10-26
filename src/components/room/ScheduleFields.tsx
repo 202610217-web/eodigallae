@@ -41,14 +41,17 @@ export function ScheduleFields({
           </option>
         ))}
       </select>
-      <TextInput
-        id={`${idPrefix}-time`}
-        aria-label="시작 시간"
-        type="time"
-        value={time ?? ""}
-        onChange={(e) => onChange({ day, time: e.target.value || null })}
-        className="min-h-11 w-32 shrink-0 text-sm"
-      />
+      {/* 입력칸 기본 스타일이 w-full이라 너비는 감싸는 요소로 고정한다 */}
+      <div className="w-36 shrink-0">
+        <TextInput
+          id={`${idPrefix}-time`}
+          aria-label="시작 시간"
+          type="time"
+          value={time ?? ""}
+          onChange={(e) => onChange({ day, time: e.target.value || null })}
+          className="min-h-11 px-3 text-sm"
+        />
+      </div>
     </div>
   );
 }
