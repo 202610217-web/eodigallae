@@ -42,14 +42,13 @@ CREATE TABLE IF NOT EXISTS decision_cards (
   category          text NOT NULL,
   sort_order        integer NOT NULL,
   stage             text NOT NULL DEFAULT 'open',   -- open | deciding | confirmed
-  mode              text,                           -- vote | roulette | battle
+  mode              text,                           -- vote | roulette | ladder | marble
   phase             text,
   round             integer NOT NULL DEFAULT 1,
   locked            boolean NOT NULL DEFAULT false,
   pool              jsonb NOT NULL DEFAULT '[]'::jsonb,
   tie_ids           jsonb NOT NULL DEFAULT '[]'::jsonb,
   phase_started_at  double precision,
-  battle_winner_id  text,
   updated_at        double precision NOT NULL
 );
 CREATE INDEX IF NOT EXISTS cards_room_idx ON decision_cards(room_id);
@@ -99,17 +98,6 @@ CREATE TABLE IF NOT EXISTS votes (
   PRIMARY KEY (card_id, member_id, round)
 );
 CREATE INDEX IF NOT EXISTS votes_room_idx ON votes(room_id);
-
-CREATE TABLE IF NOT EXISTS battle_entries (
-  card_id           text NOT NULL REFERENCES decision_cards(id) ON DELETE CASCADE,
-  member_id         text NOT NULL REFERENCES members(id) ON DELETE CASCADE,
-  round             integer NOT NULL,
-  room_id           text NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
-  taps              integer NOT NULL DEFAULT 0,
-  last_accepted_at  double precision,
-  PRIMARY KEY (card_id, member_id, round)
-);
-CREATE INDEX IF NOT EXISTS battle_room_idx ON battle_entries(room_id);
 
 -- (card_id, round) 기본키로 같은 라운드의 중복 결과 생성을 막는다
 CREATE TABLE IF NOT EXISTS decision_results (
@@ -195,3 +183,11 @@ CREATE TABLE IF NOT EXISTS opinion_responses (
   PRIMARY KEY (card_id, member_id)
 );
 CREATE INDEX IF NOT EXISTS opinion_responses_room_idx ON opinion_responses(room_id);
+
+-- 사다리 타기: {target: 'member' | 'candidate', run: 서버가 만든 사다리 | null}. 다른 방식이면 NULL
+ALTER TABLE decision_cards ADD COLUMN IF NOT EXISTS ladder jsonb;
+-- 없앤 결정 방식(결정권 쟁탈전)으로 진행 중이던 카드는 결정 전 상태로 되돌린다. 남은 battle_entries 테이블과
+-- decision_cards.battle_winner_id 열은 더 이상 쓰지 않는다 (예전 DB에 남아 있어도 무시됨)
+UPDATE decision_cards SET stage = 'open', mode = NULL, phase = NULL, pool = '[]'::jsonb, tie_ids = '[]'::jsonb,
+  phase_started_at = NULL, round = round + 1
+  WHERE stage = 'deciding' AND mode = 'battle';

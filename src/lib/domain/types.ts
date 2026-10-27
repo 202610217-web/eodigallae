@@ -1,4 +1,4 @@
-import type { CardCategory, CharacterKey, ColorKey, DecisionMode, TasteKey } from "./constants";
+import type { CardCategory, CharacterKey, ColorKey, DecisionMode, LadderTarget, TasteKey } from "./constants";
 
 export type TasteRanks = [TasteKey, TasteKey, TasteKey];
 
@@ -103,9 +103,8 @@ export type CardPhase =
   | "roulette_ready"
   | "marble_ready"
   | "marble_running"
-  | "battle_lobby"
-  | "battle_running"
-  | "battle_picking"
+  | "ladder_ready"
+  | "ladder_picking"
   | "result";
 
 export type CardDisplayStatus = "collecting" | "reviewing" | "deciding" | "confirmed";
@@ -132,10 +131,33 @@ export interface RouletteDetail {
   winnerIndex: number;
   fromTie: boolean;
 }
-export interface BattleDetail {
-  kind: "battle";
-  ranking: { memberId: string; nickname: string; taps: number }[];
-  winnerMemberId: string;
+/** 사다리의 세로줄 하나. 결정권자 정하기는 참가자, 후보 바로 정하기는 후보 (이름은 탄 시점 기준으로 저장) */
+export interface LadderLane {
+  id: string;
+  name: string;
+  character: CharacterKey | null;
+  color: ColorKey | null;
+}
+/** 서버가 한 번 만든 사다리. 모든 기기가 같은 사다리를 그린다 */
+export interface LadderRun {
+  lanes: LadderLane[];
+  steps: number;
+  rungs: [number, number][];
+  /** 당첨 칸 번호 (도착 쪽) */
+  prizeIndex: number;
+  /** 당첨 칸에 닿은 출발 레인 번호 */
+  winnerLane: number;
+  ranAt: number;
+}
+export interface LadderState {
+  target: LadderTarget;
+  /** 방장이 사다리를 타기 전에는 null */
+  run: LadderRun | null;
+}
+export interface LadderDetail {
+  kind: "ladder";
+  target: LadderTarget;
+  run: LadderRun;
 }
 export interface MarbleDetail {
   kind: "marble";
@@ -144,7 +166,7 @@ export interface MarbleDetail {
   startsAt: number;
   endsAt: number;
 }
-export type ResultDetail = VoteDetail | RouletteDetail | BattleDetail | MarbleDetail;
+export type ResultDetail = VoteDetail | RouletteDetail | LadderDetail | MarbleDetail;
 
 export interface DecisionResult {
   cardId: string;
@@ -163,13 +185,6 @@ export interface VotingView {
   myVoteCandidateId: string | null;
   /** 투표 중에는 null, 마감 후에만 공개 */
   counts: { candidateId: string; votes: number }[] | null;
-}
-
-export interface BattleEntryView {
-  memberId: string;
-  ready: boolean;
-  /** 진행 중에는 본인 것만 공개, 종료 후 전원 공개 */
-  taps: number | null;
 }
 
 export interface DecisionCardView {
@@ -193,12 +208,11 @@ export interface DecisionCardView {
   tieCandidateIds: string[];
   /** 구슬 레이스 재생 중일 때의 서버 시각 (결과는 끝날 때까지 숨긴다) */
   marble: { startsAt: number; endsAt: number } | null;
-  phaseStartedAt: number | null;
-  battleWinnerId: string | null;
+  /** 사다리 타기일 때만 */
+  ladder: LadderState | null;
   opinion: OpinionView;
   candidates: Candidate[];
   voting: VotingView | null;
-  battle: BattleEntryView[];
   result: DecisionResult | null;
 }
 

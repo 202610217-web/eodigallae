@@ -11,7 +11,7 @@ import { formatCost } from "@/lib/client/format";
 import { modeLabel } from "@/lib/domain/constants";
 import type { DecisionCardView, DecisionResult } from "@/lib/domain/types";
 
-/** 세 결정 방식이 함께 쓰는 결과 공개 화면 */
+/** 모든 결정 방식이 함께 쓰는 결과 공개 화면 */
 export function ResultReveal({ card, result }: { card: DecisionCardView; result: DecisionResult }) {
   const { view, act } = useRoom();
   const [confirming, setConfirming] = useState(false);
@@ -115,19 +115,16 @@ function ResultDetailView({ result }: { result: DecisionResult }) {
       </div>
     );
   }
-  return (
-    <div>
-      <p className="mb-1.5 text-sm font-bold">연타 순위</p>
-      <ol className="space-y-1 text-sm">
-        {d.ranking.map((r, i) => (
-          <li key={r.memberId} className="flex items-center gap-2">
-            <span className="w-5 text-center font-bold text-ink-soft">{i + 1}</span>
-            <span className="flex-1 truncate">{r.nickname}</span>
-            {r.memberId === d.winnerMemberId && <Crown className="size-4 text-[#B7860B]" aria-label="결정권자" />}
-            <span className="font-bold">{r.taps}회</span>
-          </li>
-        ))}
-      </ol>
-    </div>
-  );
+  if (d.kind === "ladder") {
+    const winner = d.run.lanes[d.run.winnerLane];
+    return (
+      <p className="text-sm text-ink-soft">
+        {d.target === "member"
+          ? `사다리 참가 ${d.run.lanes.length}명: ${d.run.lanes.map((l) => l.name).join(" · ")} → 결정권자 ${winner?.name ?? "참가자"}`
+          : `사다리 후보 ${d.run.lanes.length}개: ${d.run.lanes.map((l) => l.name).join(" · ")} (모두 같은 확률)`}
+      </p>
+    );
+  }
+  // 예전에 없앤 결정 방식의 결과는 자세한 내용을 보여주지 않는다
+  return null;
 }

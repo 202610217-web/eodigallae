@@ -105,11 +105,9 @@ export function phaseText(card: DecisionCardView): string | null {
       return "구슬 출발 대기 중";
     case "marble_running":
       return "구슬 레이스 진행 중";
-    case "battle_lobby":
-      return "쟁탈전 참가자 모집 중";
-    case "battle_running":
-      return "쟁탈전 진행 중";
-    case "battle_picking":
+    case "ladder_ready":
+      return "사다리 준비 중";
+    case "ladder_picking":
       return "결정권자가 고르는 중";
     case "result":
       return "결과 공개 · 확정 대기";

@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/Button";
 import { confirmDialog } from "@/components/ui/ConfirmDialog";
 import { cn } from "@/lib/client/cn";
 import type { DecisionCardView } from "@/lib/domain/types";
-import { ClickBattlePanel } from "./ClickBattlePanel";
 import { DecisionModePicker, MODE_INFO } from "./DecisionModePicker";
+import { LadderPanel } from "./LadderPanel";
 import { MarblePanel } from "./MarblePanel";
 import { ResultReveal } from "./ResultReveal";
 import { RoulettePanel } from "./RoulettePanel";
@@ -29,7 +29,9 @@ export function DecisionFlow({ card, onAddCandidate }: { card: DecisionCardView;
   const step = stepIndex(card);
   const info = card.mode ? MODE_INFO[card.mode] : null;
   const Icon = info?.icon;
+  // 룰렛·사다리는 결과 화면도 직접 그린다 (회전·사다리를 먼저 보여준 뒤 결과 공개)
   const isRouletteResult = card.result?.detail.kind === "roulette";
+  const ownsResult = isRouletteResult || card.mode === "ladder";
 
   const reset = async () => {
     const ok = await confirmDialog(
@@ -77,9 +79,9 @@ export function DecisionFlow({ card, onAddCandidate }: { card: DecisionCardView;
         <>
           {(card.phase === "roulette_ready" || (card.phase === "result" && isRouletteResult)) && <RoulettePanel key={card.round} card={card} />}
           {card.mode === "vote" && (card.phase === "voting" || card.phase === "tallying" || card.phase === "tie") && <VotingPanel card={card} />}
-          {card.mode === "battle" && card.phase !== "result" && <ClickBattlePanel card={card} />}
+          {card.mode === "ladder" && <LadderPanel key={card.round} card={card} />}
           {card.mode === "marble" && card.phase !== "result" && <MarblePanel card={card} />}
-          {card.phase === "result" && !isRouletteResult && card.result && <ResultReveal card={card} result={card.result} />}
+          {card.phase === "result" && !ownsResult && card.result && <ResultReveal card={card} result={card.result} />}
         </>
       )}
 

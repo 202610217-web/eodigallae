@@ -5,6 +5,8 @@ import {
   CARD_ICON_KEYS,
   CHARACTER_KEYS,
   COLOR_KEYS,
+  DECISION_MODE_KEYS,
+  LADDER_TARGET_KEYS,
   LIMITS,
   TASTE_KEYS,
   type CardIconKey,
@@ -156,7 +158,9 @@ export const actionSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("startDecision"),
     cardId: id,
-    mode: z.enum(["vote", "roulette", "battle", "marble"]),
+    mode: z.enum(DECISION_MODE_KEYS),
+    // 사다리 타기일 때: 결정권자 정하기(member) / 후보 바로 정하기(candidate)
+    ladderTarget: z.enum(LADDER_TARGET_KEYS).default("candidate"),
     // 방장이 결정 전에 빼기로 고른 후보
     excludeIds: z.array(id).max(100).default([]),
   }),
@@ -165,10 +169,8 @@ export const actionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("startTieRoulette"), cardId: id }),
   z.object({ type: z.literal("spinRoulette"), cardId: id }),
   z.object({ type: z.literal("startMarble"), cardId: id }),
-  z.object({ type: z.literal("battleReady"), cardId: id }),
-  z.object({ type: z.literal("battleStart"), cardId: id }),
-  z.object({ type: z.literal("battleTaps"), cardId: id, count: z.number().int().min(0).max(200) }),
-  z.object({ type: z.literal("battlePick"), cardId: id, candidateId: id }),
+  z.object({ type: z.literal("runLadder"), cardId: id }),
+  z.object({ type: z.literal("ladderPick"), cardId: id, candidateId: id }),
   z.object({ type: z.literal("confirmResult"), cardId: id }),
   z.object({ type: z.literal("resetDecision"), cardId: id }),
   z.object({ type: z.literal("setLock"), cardId: id, locked: z.boolean() }),

@@ -1,12 +1,4 @@
-// 결정 방식(다수결·룰렛·쟁탈전)의 순수 계산 로직. 무작위 값은 주입받아 테스트할 수 있게 한다.
-
-import {
-  BATTLE_COUNTDOWN_MS,
-  BATTLE_GRACE_MS,
-  BATTLE_MAX_BATCH_SPAN_MS,
-  BATTLE_MAX_TAPS_PER_SEC,
-  BATTLE_TAP_MS,
-} from "./constants";
+// 결정 방식(다수결·룰렛)의 순수 계산 로직. 무작위 값은 주입받아 테스트할 수 있게 한다.
 
 /** [0, n) 범위의 균등한 정수를 돌려주는 함수 */
 export type RandomInt = (n: number) => number;
@@ -56,56 +48,4 @@ export function segmentAtPointer(rotation: number, n: number): number {
   const seg = 360 / n;
   const angle = (((360 - (rotation % 360)) % 360) + 360) % 360;
   return Math.floor(angle / seg) % n;
-}
-
-export function battleWindow(phaseStartedAt: number) {
-  const start = phaseStartedAt + BATTLE_COUNTDOWN_MS;
-  const end = start + BATTLE_TAP_MS;
-  return { start, end, finalizeAt: end + BATTLE_GRACE_MS };
-}
-
-/**
- * 클라이언트가 보낸 연타 묶음 중 서버가 인정할 횟수.
- * - 연타 구간 시작 전·유예 시간 이후 도착한 입력은 0
- * - 직전 인정 시각부터 구간 종료 시각까지 사람이 낼 수 있는 최대치로 상한
- * - 한 묶음은 최근 1초 분량까지만 인정 (모았다가 몰아서 보내도 이득 없음)
- *
- * 상한은 구간 시작부터 센 '연타 칸' 수의 차이로 계산한다 (초당 15칸, 칸 경계는 고정).
- * 묶음마다 올림하면 요청을 잘게 나눠 보낼수록 1회씩 더 인정되므로, 이어진 묶음의 합이
- * 전체 구간의 칸 수(3초 × 15 = 45)를 넘지 않도록 내림한 칸 번호끼리 뺀다.
- */
-export function acceptedTaps(params: {
-  requested: number;
-  now: number;
-  lastAcceptedAt: number | null;
-  phaseStartedAt: number;
-}): number {
-  const { requested, now, lastAcceptedAt, phaseStartedAt } = params;
-  const { start, end, finalizeAt } = battleWindow(phaseStartedAt);
-  if (!Number.isFinite(requested) || requested <= 0) return 0;
-  if (now < start || now > finalizeAt) return 0;
-  const to = Math.min(now, end);
-  const from = Math.max(lastAcceptedAt ?? start, start, to - BATTLE_MAX_BATCH_SPAN_MS);
-  if (to <= from) return 0;
-  // t 시각까지 지난 연타 칸 수 (곱한 뒤 나눠 소수 오차를 피한다)
-  const slots = (t: number) => Math.floor(((t - start) * BATTLE_MAX_TAPS_PER_SEC) / 1000);
-  const cap = slots(to) - slots(from);
-  return Math.min(Math.floor(requested), cap);
-}
-
-export interface BattleRankingEntry {
-  memberId: string;
-  taps: number;
-}
-
-/** 횟수 내림차순 순위. 1등이 여럿이면 그중에서 무작위로 우승자를 정한다. */
-export function rankBattle(entries: BattleRankingEntry[], randomInt: RandomInt) {
-  if (entries.length === 0) return { ranking: [], winnerId: null as string | null, tiedTop: [] as string[] };
-  const ranking = [...entries].sort((a, b) => b.taps - a.taps);
-  const top = ranking[0].taps;
-  const tiedTop = ranking.filter((e) => e.taps === top).map((e) => e.memberId);
-  const { item: winnerId } = pickUniform(tiedTop, randomInt);
-  // 우승자를 맨 앞으로
-  ranking.sort((a, b) => (a.memberId === winnerId ? -1 : b.memberId === winnerId ? 1 : 0));
-  return { ranking, winnerId: winnerId as string | null, tiedTop };
 }

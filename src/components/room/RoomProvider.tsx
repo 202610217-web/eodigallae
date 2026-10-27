@@ -120,7 +120,7 @@ export function RoomProvider({
 
   const fast =
     view?.cards.some((c) =>
-      ["battle_running", "battle_lobby", "tallying", "marble_ready", "marble_running"].includes(c.phase ?? ""),
+      ["tallying", "marble_ready", "marble_running", "ladder_ready", "ladder_picking"].includes(c.phase ?? ""),
     ) ?? false;
 
   useEffect(() => {

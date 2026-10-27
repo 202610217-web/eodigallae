@@ -4,12 +4,13 @@ import { ListChecks, Play, Plus, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 import { useRoom } from "@/components/room/RoomProvider";
 import { Button } from "@/components/ui/Button";
+import { Segmented } from "@/components/ui/Field";
 import { Notice } from "@/components/ui/States";
 import { cn } from "@/lib/client/cn";
 import { cardSubmittedCount } from "@/lib/client/selectors";
-import type { DecisionMode } from "@/lib/domain/constants";
+import { LADDER_TARGETS, type DecisionMode, type LadderTarget } from "@/lib/domain/constants";
 import type { DecisionCardView } from "@/lib/domain/types";
-import { MODE_INFO } from "./modeInfo";
+import { LADDER_TARGET_INFO, MODE_INFO } from "./modeInfo";
 
 export { MODE_INFO };
 
@@ -23,6 +24,7 @@ export function DecisionModePicker({
 }) {
   const { view, act } = useRoom();
   const [mode, setMode] = useState<DecisionMode>("vote");
+  const [ladderTarget, setLadderTarget] = useState<LadderTarget>("member");
   const [starting, setStarting] = useState(false);
   const notSubmitted = view.members.length - cardSubmittedCount(card);
   const names = [...card.candidates].sort((a, b) => a.createdAt - b.createdAt).map((c) => c.name);
@@ -49,7 +51,7 @@ export function DecisionModePicker({
 
   const start = async () => {
     setStarting(true);
-    await act({ type: "startDecision", cardId: card.id, mode, excludeIds: [] });
+    await act({ type: "startDecision", cardId: card.id, mode, ladderTarget, excludeIds: [] });
     setStarting(false);
   };
 
@@ -83,6 +85,17 @@ export function DecisionModePicker({
           );
         })}
       </div>
+
+      {mode === "ladder" && (
+        <div className="space-y-2 rounded-[var(--radius-card)] bg-white p-4">
+          <p className="text-sm font-bold">사다리로 무엇을 정할까요?</p>
+          <Segmented name="사다리로 정할 것" value={ladderTarget} options={LADDER_TARGETS} onChange={setLadderTarget} />
+          <p className="text-sm text-ink-soft">
+            {LADDER_TARGET_INFO[ladderTarget].desc}
+            {ladderTarget === "member" && view.isDemo && " 가상 참가자는 사다리에 들어가지 않아요."}
+          </p>
+        </div>
+      )}
 
       <div className="rounded-[var(--radius-card)] bg-white p-4">
         <p className="text-sm font-bold">후보 {card.candidates.length}개</p>

@@ -1,14 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { BATTLE_COUNTDOWN_MS, BATTLE_GRACE_MS, BATTLE_MAX_TAPS_PER_SEC, BATTLE_TAP_MS } from "./constants";
-import {
-  acceptedTaps,
-  pickUniform,
-  rankBattle,
-  rouletteRotation,
-  segmentAtPointer,
-  tallyVotes,
-} from "./decide";
+import { pickUniform, rouletteRotation, segmentAtPointer, tallyVotes } from "./decide";
 import { cardDisplayStatus, decisionPool } from "./evaluate";
+import { buildLadder, ladderEnd, ladderSteps, ladderWinner } from "./ladder";
 import { marblePositions, simulateMarbleRace } from "./marble";
 import { aggregateOpinions, normalizeAnswers, normalizeQuestions } from "./opinion";
 import type { OpinionAnswers, OpinionQuestion } from "./types";
@@ -228,81 +221,59 @@ describe("룰렛", () => {
   });
 });
 
-describe("결정권 쟁탈전", () => {
-  const t0 = 1_000_000;
-  const start = t0 + BATTLE_COUNTDOWN_MS;
-  const end = start + BATTLE_TAP_MS;
+// 시드로 재현 가능한 의사 난수 (테스트용)
+function seeded(seed: number) {
+  let x = seed;
+  return (n: number) => {
+    x = (x * 1103515245 + 12345) % 2147483648;
+    return x % n;
+  };
+}
 
-  it("카운트다운 중 입력은 인정하지 않는다", () => {
-    expect(acceptedTaps({ requested: 5, now: t0 + 1000, lastAcceptedAt: null, phaseStartedAt: t0 })).toBe(0);
-  });
-
-  it("사람이 낼 수 없는 속도는 상한으로 자른다", () => {
-    const n = acceptedTaps({ requested: 999, now: start + 1000, lastAcceptedAt: null, phaseStartedAt: t0 });
-    expect(n).toBe(BATTLE_MAX_TAPS_PER_SEC);
-  });
-
-  it("정상 속도는 그대로 인정한다", () => {
-    expect(acceptedTaps({ requested: 4, now: start + 500, lastAcceptedAt: null, phaseStartedAt: t0 })).toBe(4);
-  });
-
-  it("종료 후에는 종료 시각까지의 몫만 인정하고, 유예 시간이 지나면 0", () => {
-    const late = acceptedTaps({ requested: 50, now: end + 500, lastAcceptedAt: end - 200, phaseStartedAt: t0 });
-    expect(late).toBe(3); // 0.2초 × 초당 15회
-    expect(acceptedTaps({ requested: 5, now: end + 100, lastAcceptedAt: end, phaseStartedAt: t0 })).toBe(0);
-    expect(acceptedTaps({ requested: 5, now: end + BATTLE_GRACE_MS + 1, lastAcceptedAt: end - 2000, phaseStartedAt: t0 })).toBe(0);
-  });
-
-  it("입력을 모아 두었다가 몰아서 보내면 최근 1초 분량만 인정", () => {
-    const n = acceptedTaps({ requested: 150, now: end + 300, lastAcceptedAt: null, phaseStartedAt: t0 });
-    expect(n).toBe(BATTLE_MAX_TAPS_PER_SEC);
-  });
-
-  // 서버처럼 인정된 묶음만 마지막 인정 시각을 갱신하며 계속 보낸다
-  function sendEvery(intervalMs: number, perBatch: number, untilMs = BATTLE_TAP_MS + BATTLE_GRACE_MS) {
-    let total = 0;
-    let lastAcceptedAt: number | null = null;
-    for (let t = start + intervalMs; t <= start + untilMs; t += intervalMs) {
-      const n = acceptedTaps({ requested: perBatch, now: t, lastAcceptedAt, phaseStartedAt: t0 });
-      if (n > 0) {
-        total += n;
-        lastAcceptedAt = t;
+describe("사다리 타기", () => {
+  it("어느 레인에서 출발해도 도착 칸이 겹치지 않는다 (1:1)", () => {
+    for (let lanes = 1; lanes <= 20; lanes++) {
+      for (let seed = 1; seed <= 20; seed++) {
+        const layout = buildLadder(lanes, seeded(seed));
+        const ends = [...Array(lanes).keys()].map((start) => ladderEnd(layout, start));
+        expect(new Set(ends).size).toBe(lanes);
       }
     }
-    return total;
-  }
+  });
 
-  it("묶음 간격과 상관없이 3초 동안 인정되는 합은 초당 15회 상한(45회)을 넘지 않는다", () => {
-    const max = (BATTLE_TAP_MS / 1000) * BATTLE_MAX_TAPS_PER_SEC;
-    for (const interval of [10, 33, 50, 100, 250, 340, 700]) {
-      expect(sendEvery(interval, 100)).toBeLessThanOrEqual(max);
+  it("같은 칸에 이웃한 가로줄이 없고, 이웃한 레인 사이마다 가로줄이 하나 이상 있다", () => {
+    for (let seed = 1; seed <= 500; seed++) {
+      const lanes = 2 + (seed % 19);
+      const layout = buildLadder(lanes, seeded(seed));
+      expect(layout.steps).toBe(ladderSteps(lanes));
+      const set = new Set(layout.rungs.map(([step, gap]) => `${step}:${gap}`));
+      for (const [step, gap] of layout.rungs) {
+        expect(step).toBeGreaterThanOrEqual(0);
+        expect(step).toBeLessThan(layout.steps);
+        expect(gap).toBeGreaterThanOrEqual(0);
+        expect(gap).toBeLessThan(lanes - 1);
+        expect(set.has(`${step}:${gap + 1}`)).toBe(false);
+      }
+      for (let gap = 0; gap < lanes - 1; gap++) expect(layout.rungs.some(([, g]) => g === gap)).toBe(true);
     }
-    // 요청을 아주 잘게(10ms마다) 나눠 보내도 1회씩 더 받는 이득이 없다
-    expect(sendEvery(10, 100)).toBe(max);
   });
 
-  it("상한 안의 정상 속도는 그대로 다 인정한다", () => {
-    // 초당 10회: 0.3초마다 3회씩
-    expect(sendEvery(300, 3, BATTLE_TAP_MS)).toBe(30);
+  it("당첨 칸에 닿는 출발 레인을 정확히 찾는다", () => {
+    const layout = buildLadder(6, seeded(7));
+    for (let prize = 0; prize < 6; prize++) expect(ladderEnd(layout, ladderWinner(layout, 6, prize))).toBe(prize);
   });
 
-  it("음수·NaN 입력은 0", () => {
-    expect(acceptedTaps({ requested: -3, now: start + 500, lastAcceptedAt: null, phaseStartedAt: t0 })).toBe(0);
-    expect(acceptedTaps({ requested: NaN, now: start + 500, lastAcceptedAt: null, phaseStartedAt: t0 })).toBe(0);
+  it("레인이 하나면 가로줄 없이 그대로 당첨", () => {
+    const layout = buildLadder(1, seeded(3));
+    expect(layout.rungs).toEqual([]);
+    expect(ladderWinner(layout, 1, 0)).toBe(0);
   });
 
-  it("최다 횟수가 우승, 동점이면 동점자 중에서만 고른다", () => {
-    const entries = [
-      { memberId: "a", taps: 40 },
-      { memberId: "b", taps: 52 },
-      { memberId: "c", taps: 52 },
-    ];
-    const r0 = rankBattle(entries, () => 0);
-    const r1 = rankBattle(entries, () => 1);
-    expect(r0.tiedTop).toEqual(["b", "c"]);
-    expect(r0.winnerId).toBe("b");
-    expect(r1.winnerId).toBe("c");
-    expect(r1.ranking[0].memberId).toBe("c");
-    expect(rankBattle([], () => 0).winnerId).toBeNull();
+  it("당첨 칸을 고르게 뽑으면 모든 레인의 당첨 확률이 같다", () => {
+    const lanes = 4;
+    const layout = buildLadder(lanes, seeded(11));
+    const wins = Array(lanes).fill(0);
+    for (let prize = 0; prize < lanes; prize++) wins[ladderWinner(layout, lanes, prize)] += 1;
+    expect(wins).toEqual([1, 1, 1, 1]);
   });
 });

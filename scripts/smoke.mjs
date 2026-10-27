@@ -495,7 +495,7 @@ await check("동점이면 동점 후보만 룰렛으로", async () => {
   assert.equal(r.detail.pool[r.detail.winnerIndex].candidateId, r.candidate.id);
 });
 
-// ── 결정권 쟁탈전 ──
+// ── 사다리 타기 ──
 await openOpinion(activity);
 await addCand(alice, activity, cand("바다 산책", { cost: 0, tags: ["nature", "photo"] }));
 await addCand(alice, activity, cand("보드게임 카페", { cost: 8000, tags: ["rest", "experience"] }));
@@ -504,61 +504,48 @@ s = (await host.state(roomId)).data;
 const sea = byName(s.cards[1], "바다 산책").id;
 const pub = byName(s.cards[1], "야간 포차").id;
 
-await check("쟁탈전: 준비 → 카운트다운 중 입력 무시 → 연타 상한 → 종료 후 입력 무시", async () => {
-  await host.act(roomId, { type: "startDecision", cardId: activity, mode: "battle" });
-  assert.equal((await host.act(roomId, { type: "battleStart", cardId: activity })).status, 409); // 준비한 사람 없음
-  await alice.act(roomId, { type: "battleReady", cardId: activity });
-  await bob.act(roomId, { type: "battleReady", cardId: activity });
-  assert.equal((await alice.act(roomId, { type: "battleStart", cardId: activity })).status, 403);
-  assert.equal((await host.act(roomId, { type: "battleStart", cardId: activity })).status, 200);
-  assert.equal((await host.act(roomId, { type: "battleTaps", cardId: activity, count: 5 })).status, 403); // 준비 안 한 사람
-
-  await alice.act(roomId, { type: "battleTaps", cardId: activity, count: 50 }); // 카운트다운 중
-  let me = (await alice.state(roomId)).data.cards[1].battle.find((b) => b.taps !== null);
-  assert.equal(me.taps, 0);
-  const bobView = (await bob.state(roomId)).data.cards[1].battle;
-  assert.equal(bobView.filter((b) => b.taps !== null).length, 1); // 진행 중에는 내 횟수만 보임
-
-  await sleep(3300);
-  // 앨리스: 3초 동안 계속 묶음을 보낸다. DB 응답 지연으로 묶음 간격이 1초 가까이 벌어질 수 있어
-  // 묶음당 10회로 보내고, 서버가 경과 시간 기준 상한(초당 15회)으로 잘라 인정한다.
-  const aliceLoop = (async () => {
-    const until = Date.now() + 3000;
-    while (Date.now() < until) {
-      await alice.act(roomId, { type: "battleTaps", cardId: activity, count: 10 });
-      await sleep(300);
-    }
-  })();
-  // 밥: 1초 시점에 200번을 한꺼번에 보냄 → 상한으로 잘림
-  await sleep(1000);
-  await bob.act(roomId, { type: "battleTaps", cardId: activity, count: 200 });
-  await aliceLoop;
-  // 서버 기준 종료 + 유예 시간(3s 카운트다운 + 3s + 1.5s)이 지날 때까지 대기
-  const running = (await host.state(roomId)).data;
-  const finalizeAt = running.cards[1].phaseStartedAt + 3000 + 3000 + 1500;
-  await sleep(Math.max(0, finalizeAt - running.serverNow) + 300);
-  await bob.act(roomId, { type: "battleTaps", cardId: activity, count: 100 }); // 종료·유예 시간 이후 입력 → 무시
-
-  s = (await host.state(roomId)).data;
-  const card = s.cards[1];
-  assert.equal(card.phase, "battle_picking");
-  const aliceTaps = card.battle.find((b) => b.memberId === s.members.find((m) => m.nickname === "앨리스").id).taps;
-  const bobTaps = card.battle.find((b) => b.memberId === s.members.find((m) => m.nickname === "밥").id).taps;
-  console.log(`    (앨리스 ${aliceTaps}회, 밥 ${bobTaps}회)`);
-  assert.ok(bobTaps <= 15, "몰아서 보낸 입력은 최근 1초 분량만 인정");
-  assert.ok(aliceTaps > bobTaps && aliceTaps <= 45, "정상 속도로 3초간 누른 쪽이 이기고, 상한(초당 15회)을 넘지 않음");
-  assert.equal(card.battleWinnerId, s.members.find((m) => m.nickname === "앨리스").id);
+await check("사다리(후보 바로 정하기): 방장만, 동시에 눌러도 한 번만, 당첨 칸에 닿은 후보가 결과", async () => {
+  assert.equal((await host.act(roomId, { type: "startDecision", cardId: activity, mode: "ladder", ladderTarget: "candidate" })).status, 200);
+  let card = (await bob.state(roomId)).data.cards[1];
+  assert.equal(card.phase, "ladder_ready");
+  assert.deepEqual(card.ladder, { target: "candidate", run: null });
+  assert.equal((await alice.act(roomId, { type: "runLadder", cardId: activity })).status, 403);
+  const both = await Promise.all([host.act(roomId, { type: "runLadder", cardId: activity }), host.act(roomId, { type: "runLadder", cardId: activity })]);
+  assert.ok(both.some((r) => r.status === 200));
+  card = (await bob.state(roomId)).data.cards[1];
+  assert.equal(card.phase, "result");
+  const run = card.ladder.run;
+  assert.equal(run.lanes.length, 3);
+  assert.deepEqual(run.lanes.map((l) => l.id).sort(), [...card.pool].sort());
+  assert.equal(card.result.detail.kind, "ladder");
+  assert.deepEqual(card.result.detail.run, run, "결과에 같은 사다리가 저장됨");
+  assert.equal(card.result.candidate.id, run.lanes[run.winnerLane].id);
+  assert.equal((await host.act(roomId, { type: "runLadder", cardId: activity })).status, 409);
+  assert.equal((await host.act(roomId, { type: "resetDecision", cardId: activity })).status, 200);
+  assert.equal((await bob.state(roomId)).data.cards[1].ladder, null);
 });
 
-await check("우승자만 고를 수 있고, 결정 대상 밖 후보는 우승자도 선택 불가", async () => {
-  assert.equal((await bob.act(roomId, { type: "battlePick", cardId: activity, candidateId: sea })).status, 403);
-  assert.equal((await alice.act(roomId, { type: "battlePick", cardId: activity, candidateId: X })).status, 400); // 다른 카드의 후보
-  assert.ok(s.cards[1].pool.includes(pub));
-  assert.equal((await alice.act(roomId, { type: "battlePick", cardId: activity, candidateId: sea })).status, 200);
-  assert.equal((await alice.act(roomId, { type: "battlePick", cardId: activity, candidateId: sea })).status, 409);
+await check("사다리(결정권자 정하기): 당첨된 사람만 고르고, 결정 대상 밖 후보는 불가", async () => {
+  assert.equal((await host.act(roomId, { type: "startDecision", cardId: activity, mode: "ladder", ladderTarget: "member" })).status, 200);
+  assert.equal((await host.act(roomId, { type: "runLadder", cardId: activity })).status, 200);
+  const card = (await host.state(roomId)).data.cards[1];
+  assert.equal(card.phase, "ladder_picking");
+  assert.equal(card.result, null);
+  const run = card.ladder.run;
+  assert.equal(run.lanes.length, 3, "참가자 3명이 사다리를 탐");
+  const clients = [host, alice, bob];
+  const ids = await Promise.all(clients.map(async (c) => (await c.state(roomId)).data.me.id));
+  const decider = clients[ids.indexOf(run.lanes[run.winnerLane].id)];
+  const other = clients.find((c) => c !== decider);
+  assert.equal((await other.act(roomId, { type: "ladderPick", cardId: activity, candidateId: sea })).status, 403);
+  assert.equal((await decider.act(roomId, { type: "ladderPick", cardId: activity, candidateId: X })).status, 400); // 다른 카드의 후보
+  assert.ok(card.pool.includes(pub));
+  assert.equal((await decider.act(roomId, { type: "ladderPick", cardId: activity, candidateId: sea })).status, 200);
+  assert.equal((await decider.act(roomId, { type: "ladderPick", cardId: activity, candidateId: sea })).status, 409);
   s = (await bob.state(roomId)).data;
   assert.equal(s.cards[1].result.candidate.name, "바다 산책");
-  assert.equal(s.cards[1].result.detail.kind, "battle");
+  assert.equal(s.cards[1].result.detail.kind, "ladder");
+  assert.equal(s.cards[1].result.detail.target, "member");
 });
 
 // ── 예외 ──
@@ -668,7 +655,7 @@ await check("내보내기: 결정 중에는 불가, 내보낸 참가자는 모�
   assert.equal(blocked.status, 409);
   assert.equal(blocked.data.code, "DECIDING");
   assert.equal((await alice.act(roomId, { type: "resetDecision", cardId: lunch })).status, 200);
-  assert.equal((await alice.act(roomId, { type: "confirmResult", cardId: activity })).status, 200); // 쟁탈전 결과 확정 대기도 결정 중
+  assert.equal((await alice.act(roomId, { type: "confirmResult", cardId: activity })).status, 200); // 사다리 결과 확정 대기도 결정 중
   assert.equal((await alice.act(roomId, { type: "kickMember", memberId: bobId })).status, 200);
   assert.equal((await bob.state(roomId)).status, 401);
   assert.ok(!(await bob.req("/api/auth/me")).data.rooms.some((x) => x.id === roomId));

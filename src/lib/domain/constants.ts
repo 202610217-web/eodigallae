@@ -168,24 +168,24 @@ export const RESTRICTIONS: Record<
 export const DECISION_MODES = [
   { key: "vote", label: "다수결" },
   { key: "roulette", label: "운명의 룰렛" },
-  { key: "battle", label: "결정권 쟁탈전" },
+  { key: "ladder", label: "사다리 타기" },
   { key: "marble", label: "구슬 레이스" },
 ] as const;
 export type DecisionMode = (typeof DECISION_MODES)[number]["key"];
+export const DECISION_MODE_KEYS = DECISION_MODES.map((m) => m.key) as [DecisionMode, ...DecisionMode[]];
 
-export function modeLabel(mode: DecisionMode): string {
-  return DECISION_MODES.find((m) => m.key === mode)?.label ?? mode;
+/** 예전에 쓰다 없앤 방식(결정권 쟁탈전 등)으로 남은 결과는 이름 대신 이 문구로 보여준다 */
+export function modeLabel(mode: string): string {
+  return DECISION_MODES.find((m) => m.key === mode)?.label ?? "이전 결정 방식";
 }
 
-// 결정권 쟁탈전 타이밍 (ms)
-export const BATTLE_COUNTDOWN_MS = 3_000;
-export const BATTLE_TAP_MS = 3_000;
-// 네트워크 지연으로 늦게 도착한 마지막 묶음만 받아주는 유예 시간
-export const BATTLE_GRACE_MS = 1_500;
-// 사람이 낼 수 있는 연타 속도 상한 (초당)
-export const BATTLE_MAX_TAPS_PER_SEC = 15;
-// 한 묶음이 인정받을 수 있는 최대 시간 폭. 입력을 모아 두었다가 끝에 한꺼번에 보내는 것을 막는다.
-export const BATTLE_MAX_BATCH_SPAN_MS = 1_000;
+// 사다리 타기: 참가자 중 결정권자를 뽑거나, 후보 중 하나를 바로 뽑는다
+export const LADDER_TARGETS = [
+  { key: "member", label: "결정권자 정하기" },
+  { key: "candidate", label: "후보 바로 정하기" },
+] as const;
+export type LadderTarget = (typeof LADDER_TARGETS)[number]["key"];
+export const LADDER_TARGET_KEYS = LADDER_TARGETS.map((t) => t.key) as [LadderTarget, ...LadderTarget[]];
 
 export const LIMITS = {
   roomName: 30,

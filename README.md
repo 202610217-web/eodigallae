@@ -1,6 +1,6 @@
 # 어디갈래?
 
-**취향은 모으고, 결정은 함께!** — 친구들이 여행 취향과 조건을 모으고, 후보를 비교하고, 다수결·룰렛·연타 게임으로 최종 결정을 내리는 모임 보드.
+**취향은 모으고, 결정은 함께!** — 친구들이 여행 취향과 조건을 모으고, 후보를 비교하고, 다수결·룰렛·사다리·구슬 레이스로 최종 결정을 내리는 모임 보드.
 
 - Next.js 16 (App Router, Turbopack) · TypeScript · Tailwind CSS v4 · Lucide 아이콘
 - Neon PostgreSQL (`@neondatabase/serverless`) / 로컬 개발용 PGlite(내장 Postgres)
@@ -55,14 +55,15 @@ npm run dev          # http://localhost:3000
 
 ```
 db/schema.sql                    테이블 정의 (Room, Member, TastePreference, DecisionCard,
-                                 MemberCondition, Candidate, Vote, BattleEntry, DecisionResult)
+                                 MemberCondition, Candidate, Vote, DecisionResult, MarbleRace)
 scripts/migrate.mjs              Neon 스키마 적용
 scripts/smoke.mjs                다중 사용자 API 시나리오 검증
 scripts/smoke-isolated.mjs       공유 DB 없이 테스트 서버를 띄워 smoke.mjs 실행 (npm run smoke)
 src/lib/domain/                  ★ 순수 로직 (UI·DB와 무관, 테스트 대상)
   constants.ts                   취향·캐릭터·제외 조건·타이밍 상수
   evaluate.ts                    필수 조건 판정, 취향 점수(3/2/1), 추천 이유, 카드 상태
-  decide.ts                      다수결 집계, 균등 추첨, 룰렛 각도, 연타 검증
+  decide.ts                      다수결 집계, 균등 추첨, 룰렛 각도
+  ladder.ts                      사다리 만들기·따라가기(도착 칸 1:1 보장)
   domain.test.ts                 단위 테스트
 src/lib/validation.ts            zod 입력 스키마 (API 액션 전체)
 src/lib/server/                  서버 전용 (import "server-only")
@@ -76,25 +77,29 @@ src/components/ui/               Button, StatusBadge, Sheet(바텀시트↔오�
 src/components/room/             RoomProvider(주기 조회), RoomHeader, MemberStatusList, DecisionCard,
                                  TasteRankPicker, ConditionForm, CandidateForm/List, ReasonList, ConfirmedPlan
 src/components/decision/         DecisionFlow(공통 레이아웃), DecisionModePicker, VotingPanel,
-                                 RoulettePanel, ClickBattlePanel, ResultReveal(공통 결과)
+                                 RoulettePanel, LadderPanel, MarblePanel, ResultReveal(공통 결과)
 ```
 
 ## 핵심 규칙
 
 - **필수 조건**(예산, 제외 음식/활동/숙소 조건)에 걸리면 `조건 충돌`, 비용·특징 정보가 없거나('기타' 포함) 조건 미입력 참가자가 있으면 `확인 필요`. 추천 표시는 통과 후보만.
-- 조건 충돌·확인 필요 후보도 **자동으로 빼지 않는다.** 방장이 결정을 시작할 때 이런 후보가 있으면 후보별 이유를 보여주는 검토 단계가 나오고, 방장이 이번 결정에서 뺄 후보를 고른다(`startDecision.excludeIds`). 투표·룰렛·쟁탈전 화면에도 각 후보의 이유가 함께 표시된다.
+- 조건 충돌·확인 필요 후보도 **자동으로 빼지 않는다.** 방장이 결정을 시작할 때 이런 후보가 있으면 후보별 이유를 보여주는 검토 단계가 나오고, 방장이 이번 결정에서 뺄 후보를 고른다(`startDecision.excludeIds`). 투표·룰렛 화면에도 각 후보의 이유가 함께 표시된다.
 - 후보 등록에는 '모름'이 없고 비용·특징·실내/야외·분위기마다 **'기타'** 를 골라 내용을 직접 적는다(`candidates.notes`). 기타로 적은 비용·특징은 판정할 수 없으므로 `확인 필요`가 되고, 적은 내용이 이유에 그대로 나온다.
 - **선호 조건**(실내/야외, 분위기, 원하는 점, 의견)은 참고 문구로만 표시, 점수·차단 없음.
 - 취향 점수: 1순위 3점 · 2순위 2점 · 3순위 1점 합산. 순위는 참고용.
 - 결정 시작 시점에 방장이 남긴 후보를 `pool`로 고정하고, 결정 중에는 후보·조건 수정을 잠급니다.
 - 다수결: `(card, member, round)` 기본키로 1인 1표. 마감 전 득표수·타인 선택 비공개. 동점 → 동점 후보만 룰렛.
 - 룰렛: 서버가 `crypto.randomInt`로 먼저 당첨을 정하고, 화면은 그 칸에서 멈추는 회전만 보여줌.
-- 쟁탈전: 서버 시각 기준 3초 카운트다운 + 3초. 클라이언트는 0.3초마다 횟수 묶음을 보내고, 서버는
-  구간 밖 입력 거절 · 초당 15회 상한 · 한 묶음은 최근 1초분까지만 인정. 키 자동 반복은 클라이언트에서 무시.
+- 사다리 타기: 방장이 결정을 시작할 때 **결정권자 정하기**(참가자가 탐, 가상 참가자 제외) 또는 **후보 바로 정하기**(후보가 탐)를 고른다(`startDecision.ladderTarget`).
+  방장이 [사다리 타기]를 누르면 서버가 사다리(가로줄)와 당첨 칸을 `crypto.randomInt`로 정해 `decision_cards.ladder`에 저장하고, 모든 기기가 같은 사다리를 따라 내려가는 모습을 보여준다.
+  같은 칸에 이웃한 가로줄을 두지 않아 출발↔도착이 1:1이고, 당첨 칸을 고르게 뽑으므로 모든 줄의 당첨 확률이 같다.
+  후보 바로 정하기는 바로 결과, 결정권자 정하기는 당첨된 사람이 결정 대상 후보 중 하나를 고르면 결과(`ladderPick`).
 - 결과는 `(card, round)` 기본키로 중복 생성 불가, 확정은 조건부 UPDATE로 한 번만.
-- 방장: 결정 시작/마감/룰렛/게임 시작/확정/카드 잠금/결정 취소·다시 정하기, 모든 후보 수정·삭제.
-- 방장 넘기기(참가자 목록 → 관리): 다른 참가자 한 명에게 넘기면 나는 일반 참가자가 된다. 가상 참가자(데모 봇)에게는 불가.
+- 방장: 결정 시작/마감/룰렛·사다리·구슬 출발/확정/카드 잠금/결정 취소·다시 정하기, 모든 후보 수정·삭제.
+- 방장 넘기기(참가자 목록 → 방 설정): 다른 참가자 한 명에게 넘기면 나는 일반 참가자가 된다. 가상 참가자(데모 봇)에게는 불가.
 - 참가자 내보내기: 결정 진행 중(결과 확정 대기 포함)인 카드가 없을 때만. 그 사람의 취향·조건·투표 기록은 삭제, 올린 후보는 유지. 초대 링크로 다시 참여할 수 있다.
+- 방 삭제(방 설정): 방장만. 모임의 모든 기록이 함께 지워지고, 남은 참가자는 다음 조회에서 처음 화면으로 나가며 안내를 본다.
+- 결정권 쟁탈전(연타 게임)은 없앴다. 예전 결과는 '이전 결정 방식'으로 표시되고, 진행 중이던 카드는 스키마 적용 때 결정 전으로 돌아간다.
 
 ## 구슬 레이스 (결정 방식)
 
@@ -127,7 +132,7 @@ src/components/decision/         DecisionFlow(공통 레이아웃), DecisionMode
 
 ## 실시간 동기화
 
-WebSocket 대신 **주기적 조회**: 평소 3초, 쟁탈전·집계 중 1초, 탭이 숨겨지면 중지. 모든 변경은 서버에 먼저 저장된 뒤 재조회됩니다.
+WebSocket 대신 **주기적 조회**: 평소 3초, 집계·구슬 레이스·사다리 진행 중 1초, 탭이 숨겨지면 중지. 모든 변경은 서버에 먼저 저장된 뒤 재조회됩니다.
 
 ## 남은 작업 / 알려진 한계
 

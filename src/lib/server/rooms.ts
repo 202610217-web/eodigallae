@@ -8,15 +8,16 @@ import {
   type CharacterKey,
   type ColorKey,
   type DecisionMode,
+  type LadderTarget,
   type TasteKey,
   guessCardTime,
 } from "@/lib/domain/constants";
-import { battleWindow, acceptedTaps, pickUniform, rankBattle, tallyVotes } from "@/lib/domain/decide";
+import { pickUniform, tallyVotes } from "@/lib/domain/decide";
 import { cardDisplayStatus, decisionPool } from "@/lib/domain/evaluate";
+import { buildLadder, ladderWinner } from "@/lib/domain/ladder";
 import { MARBLE_COUNTDOWN_MS, MARBLE_FINISH_HOLD_MS, simulateMarbleRace, type MarbleRace } from "@/lib/domain/marble";
 import { aggregateOpinions, normalizeAnswers, normalizeQuestions, type QuestionInput } from "@/lib/domain/opinion";
 import type {
-  BattleDetail,
   Candidate,
   CandidateNotes,
   CandidateSetting,
@@ -26,6 +27,9 @@ import type {
   CardStage,
   DecisionCardView,
   DecisionResult,
+  LadderLane,
+  LadderRun,
+  LadderState,
   Member,
   OpinionAnswers,
   OpinionQuestion,
@@ -64,8 +68,7 @@ interface CardRow {
   locked: boolean;
   pool: string[];
   tieIds: string[];
-  phaseStartedAt: number | null;
-  battleWinnerId: string | null;
+  ladder: LadderState | null;
   questions: OpinionQuestion[];
 }
 
@@ -82,13 +85,6 @@ interface VoteRow {
   candidateId: string;
 }
 
-interface BattleRow {
-  cardId: string;
-  memberId: string;
-  taps: number;
-  lastAcceptedAt: number | null;
-}
-
 interface RoomData {
   room: RoomRow;
   members: Member[];
@@ -96,7 +92,6 @@ interface RoomData {
   responses: ResponseRow[];
   candidates: Candidate[];
   votes: VoteRow[];
-  battle: BattleRow[];
   results: DecisionResult[];
   meId: string | null;
 }
@@ -146,8 +141,7 @@ function mapCard(r: Row): CardRow {
     locked: Boolean(r.locked),
     pool: json<string[]>(r.pool),
     tieIds: json<string[]>(r.tie_ids),
-    phaseStartedAt: optNum(r.phase_started_at),
-    battleWinnerId: (r.battle_winner_id as string | null) ?? null,
+    ladder: r.ladder ? json<LadderState>(r.ladder) : null,
     questions: r.questions ? json<OpinionQuestion[]>(r.questions) : [],
   };
 }
@@ -206,11 +200,6 @@ async function loadRoom(db: Db, roomId: string, token: string | null): Promise<R
       params: p,
     },
     {
-      text: `SELECT b.card_id, b.member_id, b.taps, b.last_accepted_at FROM battle_entries b
-             JOIN decision_cards c ON c.id = b.card_id AND c.round = b.round WHERE b.room_id = $1`,
-      params: p,
-    },
-    {
       text: `SELECT r.* FROM decision_results r
              JOIN decision_cards c ON c.id = r.card_id AND c.round = r.round WHERE r.room_id = $1`,
       params: p,
@@ -220,7 +209,7 @@ async function loadRoom(db: Db, roomId: string, token: string | null): Promise<R
       params: [roomId, token ? hashToken(token) : "-"],
     },
   ];
-  const [rooms, members, cards, responses, candidates, votes, battle, results, me] = await db.batch(queries);
+  const [rooms, members, cards, responses, candidates, votes, results, me] = await db.batch(queries);
   if (rooms.length === 0) throw new AppError(404, "모임을 찾을 수 없어요. 초대 링크를 다시 확인해주세요.", "ROOM_NOT_FOUND");
   return {
     room: mapRoom(rooms[0]),
@@ -229,12 +218,6 @@ async function loadRoom(db: Db, roomId: string, token: string | null): Promise<R
     responses: responses.map((r) => ({ cardId: str(r.card_id), memberId: str(r.member_id), answers: json<OpinionAnswers>(r.answers) })),
     candidates: candidates.map(mapCandidate),
     votes: votes.map((r) => ({ cardId: str(r.card_id), memberId: str(r.member_id), candidateId: str(r.candidate_id) })),
-    battle: battle.map((r) => ({
-      cardId: str(r.card_id),
-      memberId: str(r.member_id),
-      taps: num(r.taps),
-      lastAcceptedAt: optNum(r.last_accepted_at),
-    })),
     results: results.map(mapResult),
     meId: me[0] ? str(me[0].id) : null,
   };
@@ -278,8 +261,6 @@ function buildView(data: RoomData, now: number, storage: Db["kind"]): RoomView {
     const opinion = opinionView(data, card, me.id);
     const candidates = data.candidates.filter((c) => c.cardId === card.id);
     const votes = data.votes.filter((v) => v.cardId === card.id);
-    const entries = data.battle.filter((b) => b.cardId === card.id);
-    const battleRevealed = card.phase !== "battle_lobby" && card.phase !== "battle_running";
     const result = data.results.find((r) => r.cardId === card.id) ?? null;
 
     return {
@@ -299,8 +280,7 @@ function buildView(data: RoomData, now: number, storage: Db["kind"]): RoomView {
       pool: card.pool,
       tieCandidateIds: card.tieIds,
       marble: marbleTiming(card, result),
-      phaseStartedAt: card.phaseStartedAt,
-      battleWinnerId: card.battleWinnerId,
+      ladder: card.mode === "ladder" ? card.ladder : null,
       opinion,
       candidates,
       voting:
@@ -313,14 +293,6 @@ function buildView(data: RoomData, now: number, storage: Db["kind"]): RoomView {
               counts: card.phase === "voting" || card.phase === "tallying" ? null : tallyVotes(votes, card.pool).counts,
             }
           : null,
-      battle:
-        card.mode === "battle"
-          ? entries.map((b) => ({
-              memberId: b.memberId,
-              ready: true,
-              taps: battleRevealed || b.memberId === me.id ? b.taps : null,
-            }))
-          : [],
       // 구슬 레이스는 재생이 끝날 때까지 결과를 보내지 않는다 (먼저 보고 김새지 않게)
       result: card.phase === "marble_running" ? null : result,
     };
@@ -341,13 +313,13 @@ function buildView(data: RoomData, now: number, storage: Db["kind"]): RoomView {
   };
 }
 
-/** 시간 경과로 넘어가야 하는 단계(쟁탈전 종료)를 처리한다. 조건부 UPDATE라 여러 요청이 동시에 와도 한 번만 반영된다. */
 /** 구슬 레이스 재생 시각 (재생 중일 때만) */
 function marbleTiming(card: CardRow, result: DecisionResult | null): DecisionCardView["marble"] {
   if (card.phase !== "marble_running" || result?.detail.kind !== "marble") return null;
   return { startsAt: result.detail.startsAt, endsAt: result.detail.endsAt };
 }
 
+/** 시간 경과로 넘어가야 하는 단계(구슬 레이스 재생 끝)를 처리한다. 조건부 UPDATE라 여러 요청이 동시에 와도 한 번만 반영된다. */
 async function advanceTimers(db: Db, data: RoomData, now: number): Promise<boolean> {
   let changed = false;
   // 구슬 레이스 재생이 끝나면 결과 공개
@@ -358,18 +330,6 @@ async function advanceTimers(db: Db, data: RoomData, now: number): Promise<boole
     const rows = await db.query(
       `UPDATE decision_cards SET phase = 'result', updated_at = $1 WHERE id = $2 AND phase = 'marble_running' AND round = $3 RETURNING id`,
       [now, card.id, card.round],
-    );
-    if (rows.length > 0) changed = true;
-  }
-  for (const card of data.cards) {
-    if (card.phase !== "battle_running" || card.phaseStartedAt === null) continue;
-    if (now < battleWindow(card.phaseStartedAt).finalizeAt) continue;
-    const entries = data.battle.filter((b) => b.cardId === card.id);
-    const { winnerId } = rankBattle(entries, secureRandom);
-    const rows = await db.query(
-      `UPDATE decision_cards SET phase = 'battle_picking', battle_winner_id = $1, updated_at = $2
-       WHERE id = $3 AND phase = 'battle_running' AND round = $4 RETURNING id`,
-      [winnerId, now, card.id, card.round],
     );
     if (rows.length > 0) changed = true;
   }
@@ -914,13 +874,14 @@ export async function performAction(roomId: string, token: string | null, action
         );
       }
       const phase: CardPhase = (
-        { vote: "voting", roulette: "roulette_ready", battle: "battle_lobby", marble: "marble_ready" } as const satisfies Record<DecisionMode, CardPhase>
+        { vote: "voting", roulette: "roulette_ready", ladder: "ladder_ready", marble: "marble_ready" } as const satisfies Record<DecisionMode, CardPhase>
       )[action.mode];
+      const ladder: LadderState | null = action.mode === "ladder" ? { target: action.ladderTarget, run: null } : null;
       const rows = await db.query(
         `UPDATE decision_cards SET stage = 'deciding', mode = $1, phase = $2, pool = $3::jsonb, tie_ids = '[]'::jsonb,
-           phase_started_at = $4, battle_winner_id = NULL, updated_at = $4
+           phase_started_at = $4, ladder = $7::jsonb, updated_at = $4
          WHERE id = $5 AND stage = 'open' AND round = $6 RETURNING id`,
-        [action.mode, phase, JSON.stringify(pool), now, card.id, card.round],
+        [action.mode, phase, JSON.stringify(pool), now, card.id, card.round, ladder ? JSON.stringify(ladder) : null],
       );
       if (rows.length === 0) throw new AppError(409, "다른 사람이 먼저 결정을 시작했어요.");
       return;
@@ -1032,75 +993,63 @@ export async function performAction(roomId: string, token: string | null, action
       return;
     }
 
-    case "battleReady": {
-      const card = requireCard(data, action.cardId);
-      requirePhase(card, "battle_lobby", "지금은 준비할 수 없어요. 게임이 이미 시작됐을 수 있어요.");
-      await db.query(
-        `INSERT INTO battle_entries (card_id, member_id, round, room_id, taps) VALUES ($1, $2, $3, $4, 0)
-         ON CONFLICT (card_id, member_id, round) DO NOTHING`,
-        [card.id, me.id, card.round, roomId],
-      );
-      return;
-    }
-
-    case "battleStart": {
+    case "runLadder": {
       requireHost(me);
       const card = requireCard(data, action.cardId);
-      requirePhase(card, "battle_lobby", "게임을 시작할 수 있는 단계가 아니에요.");
-      if (!data.battle.some((b) => b.cardId === card.id)) throw new AppError(409, "준비 완료한 참가자가 있어야 시작할 수 있어요.");
-      await db.query(
-        `UPDATE decision_cards SET phase = 'battle_running', phase_started_at = $1, updated_at = $1
-         WHERE id = $2 AND phase = 'battle_lobby' AND round = $3`,
-        [now, card.id, card.round],
+      requirePhase(card, "ladder_ready", "사다리를 탈 수 있는 단계가 아니에요.");
+      const target: LadderTarget = card.ladder?.target ?? "candidate";
+      const pool = card.pool.map((id) => data.candidates.find((c) => c.id === id)).filter((c) => c !== undefined);
+      // 결정권자 정하기는 직접 고를 수 있는 사람만 (데모의 가상 참가자는 빠진다)
+      const lanes: LadderLane[] =
+        target === "member"
+          ? data.members.filter((m) => !m.isBot).map((m) => ({ id: m.id, name: m.nickname, character: m.character, color: m.color }))
+          : pool.map((c) => ({ id: c.id, name: c.name, character: null, color: null }));
+      if (pool.length === 0 || lanes.length === 0) throw new AppError(409, "사다리에 넣을 후보가 없어요. 결정을 다시 진행해주세요.");
+      // 사다리와 당첨 칸을 서버가 먼저 정하고, 화면은 같은 사다리를 따라 내려가는 모습만 보여준다
+      const layout = buildLadder(lanes.length, secureRandom);
+      const prizeIndex = secureRandom(lanes.length);
+      const run: LadderRun = { lanes, ...layout, prizeIndex, winnerLane: ladderWinner(layout, lanes.length, prizeIndex), ranAt: now };
+      const winner = lanes[run.winnerLane];
+      // 아직 아무도 타지 않았을 때만 저장한다 (동시에 눌러도 한 번만). 결정권자 정하기는 바로 고르는 단계로
+      const saved = await db.query(
+        `UPDATE decision_cards SET ladder = $1::jsonb, phase = $2, updated_at = $3
+         WHERE id = $4 AND round = $5 AND phase = 'ladder_ready' AND ladder->>'run' IS NULL RETURNING id`,
+        [JSON.stringify({ target, run } satisfies LadderState), target === "member" ? "ladder_picking" : "ladder_ready", now, card.id, card.round],
       );
-      return;
-    }
-
-    case "battleTaps": {
-      const card = requireCard(data, action.cardId);
-      if (card.phase !== "battle_running" || card.phaseStartedAt === null) return; // 종료 후 도착한 입력은 조용히 무시
-      const entry = data.battle.find((b) => b.cardId === card.id && b.memberId === me.id);
-      if (!entry) throw new AppError(403, "준비 완료한 참가자만 참여할 수 있어요.");
-      const accepted = acceptedTaps({
-        requested: action.count,
+      if (saved.length === 0 || target === "member") return;
+      await insertResult(
+        db,
+        card,
+        {
+          candidate: pool.find((c) => c.id === winner.id)!,
+          mode: "ladder",
+          reasons: [`후보 ${lanes.length}개 중 사다리 타기로 당첨`],
+          detail: { kind: "ladder", target, run },
+          requiredPhase: "ladder_ready",
+        },
         now,
-        lastAcceptedAt: entry.lastAcceptedAt,
-        phaseStartedAt: card.phaseStartedAt,
-      });
-      if (accepted === 0) return;
-      // 같은 사람의 요청이 겹쳐도 한도를 두 번 쓰지 못하도록 직전 값 기준으로만 갱신
-      await db.query(
-        `UPDATE battle_entries SET taps = taps + $1, last_accepted_at = $2
-         WHERE card_id = $3 AND member_id = $4 AND round = $5 AND last_accepted_at IS NOT DISTINCT FROM $6`,
-        [accepted, now, card.id, me.id, card.round, entry.lastAcceptedAt],
       );
       return;
     }
 
-    case "battlePick": {
+    case "ladderPick": {
       const card = requireCard(data, action.cardId);
-      requirePhase(card, "battle_picking", "지금은 장소를 고를 수 있는 단계가 아니에요.");
-      if (card.battleWinnerId !== me.id) throw new AppError(403, "결정권자만 장소를 고를 수 있어요.");
-      if (!card.pool.includes(action.candidateId)) {
-        throw new AppError(400, "결정 대상 후보만 고를 수 있어요.");
-      }
-      const candidate = data.candidates.find((c) => c.id === action.candidateId)!;
-      const entries = data.battle.filter((b) => b.cardId === card.id).sort((a, b) => b.taps - a.taps);
-      const ranking = [
-        ...entries.filter((e) => e.memberId === me.id),
-        ...entries.filter((e) => e.memberId !== me.id),
-      ].map((e) => ({ memberId: e.memberId, nickname: data.members.find((m) => m.id === e.memberId)?.nickname ?? "참가자", taps: e.taps }));
-      const myTaps = entries.find((e) => e.memberId === me.id)?.taps ?? 0;
-      const detail: BattleDetail = { kind: "battle", ranking, winnerMemberId: me.id };
+      requirePhase(card, "ladder_picking", "지금은 후보를 고를 수 있는 단계가 아니에요.");
+      const run = card.ladder?.run;
+      if (!run) throw new AppError(409, "사다리 결과를 찾을 수 없어요. 결정을 다시 진행해주세요.");
+      if (run.lanes[run.winnerLane].id !== me.id) throw new AppError(403, "결정권자만 후보를 고를 수 있어요.");
+      if (!card.pool.includes(action.candidateId)) throw new AppError(400, "결정 대상 후보만 고를 수 있어요.");
+      const candidate = data.candidates.find((c) => c.id === action.candidateId);
+      if (!candidate) throw new AppError(404, "후보를 찾을 수 없어요. 이미 삭제됐을 수 있어요.");
       await insertResult(
         db,
         card,
         {
           candidate,
-          mode: "battle",
-          reasons: [`${me.nickname}님이 ${myTaps}회 연타로 결정권 획득`, `${me.nickname}님이 직접 선택`],
-          detail,
-          requiredPhase: "battle_picking",
+          mode: "ladder",
+          reasons: [`${run.lanes.length}명 중 사다리 타기로 ${me.nickname}님이 결정권 획득`, `${me.nickname}님이 직접 선택`],
+          detail: { kind: "ladder", target: "member", run },
+          requiredPhase: "ladder_picking",
         },
         now,
       );
@@ -1133,14 +1082,13 @@ export async function performAction(roomId: string, token: string | null, action
       if (card.stage === "open") throw new AppError(409, "진행 중인 결정이 없어요.");
       const rows = await db.query(
         `UPDATE decision_cards SET stage = 'open', mode = NULL, phase = NULL, pool = '[]'::jsonb, tie_ids = '[]'::jsonb,
-           phase_started_at = NULL, battle_winner_id = NULL, round = round + 1, updated_at = $1
+           phase_started_at = NULL, ladder = NULL, round = round + 1, updated_at = $1
          WHERE id = $2 AND round = $3 RETURNING round`,
         [now, card.id, card.round],
       );
       if (rows.length === 0) return;
       await db.batch([
         { text: "DELETE FROM votes WHERE card_id = $1 AND round < $2", params: [card.id, rows[0].round] },
-        { text: "DELETE FROM battle_entries WHERE card_id = $1 AND round < $2", params: [card.id, rows[0].round] },
         { text: "DELETE FROM marble_races WHERE card_id = $1 AND round < $2", params: [card.id, rows[0].round] },
       ]);
       return;
@@ -1187,7 +1135,7 @@ export async function performAction(roomId: string, token: string | null, action
     case "kickMember": {
       requireHost(me);
       const target = requireOtherMember(data, me, action.memberId);
-      // 결정 중에 사람이 빠지면 투표 인원·쟁탈전 참가자가 어긋나므로 결정이 없을 때만 허용
+      // 결정 중에 사람이 빠지면 투표 인원·사다리 참가자가 어긋나므로 결정이 없을 때만 허용
       if (data.cards.some((c) => c.stage === "deciding")) {
         throw new AppError(409, "결정이 진행 중일 때는 내보낼 수 없어요. 결정을 마치거나 취소한 뒤 다시 시도해주세요.", "DECIDING");
       }
