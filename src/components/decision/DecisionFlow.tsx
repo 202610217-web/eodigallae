@@ -4,6 +4,7 @@ import { RotateCcw } from "lucide-react";
 import { useState } from "react";
 import { useRoom } from "@/components/room/RoomProvider";
 import { Button } from "@/components/ui/Button";
+import { confirmDialog } from "@/components/ui/ConfirmDialog";
 import { cn } from "@/lib/client/cn";
 import type { DecisionCardView } from "@/lib/domain/types";
 import { ClickBattlePanel } from "./ClickBattlePanel";
@@ -31,11 +32,17 @@ export function DecisionFlow({ card, onAddCandidate }: { card: DecisionCardView;
   const isRouletteResult = card.result?.detail.kind === "roulette";
 
   const reset = async () => {
-    const msg =
+    const ok = await confirmDialog(
       card.stage === "confirmed"
-        ? "확정을 취소하고 이 카드를 다시 진행할까요? 확정된 일정에서 빠져요."
-        : "진행 중인 결정을 취소할까요? 투표·게임 기록이 초기화되고 후보와 의견을 다시 수정할 수 있어요.";
-    if (!window.confirm(msg)) return;
+        ? { title: "확정을 취소하고 다시 진행할까요?", description: "이 카드는 확정된 일정에서 빠져요.", confirmLabel: "다시 진행" }
+        : {
+            title: "진행 중인 결정을 취소할까요?",
+            description: "투표·게임 기록이 초기화되고 후보와 의견을 다시 수정할 수 있어요.",
+            confirmLabel: "결정 취소",
+            tone: "danger",
+          },
+    );
+    if (!ok) return;
     setResetting(true);
     await act({ type: "resetDecision", cardId: card.id });
     setResetting(false);

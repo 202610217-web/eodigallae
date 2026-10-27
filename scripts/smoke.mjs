@@ -747,4 +747,17 @@ await check("데모: 가상 참가자는 의견을 미리 제출, 방장은 직�
   assert.equal((await carol.state(demo.data.roomId)).data.cards[0].stage, "confirmed");
 });
 
+// ── 방 삭제 ── (구슬 모임: 방장=host, 참가자=carol)
+await check("방 삭제: 방장만 가능, 삭제하면 남은 참가자도 모임에 접근 불가", async () => {
+  assert.equal((await carol.act(mr.roomId, { type: "deleteRoom" })).status, 403);
+  assert.equal((await host.act(mr.roomId, { type: "deleteRoom" })).status, 200);
+  for (const who of [host, carol]) {
+    const r = await who.state(mr.roomId);
+    assert.equal(r.status, 404);
+    assert.equal(r.data.code, "ROOM_NOT_FOUND");
+  }
+  assert.ok(!(await carol.req("/api/auth/me")).data.rooms.some((x) => x.id === mr.roomId));
+  assert.equal((await host.act(mr.roomId, { type: "deleteRoom" })).status, 404);
+});
+
 console.log(`\n${passed}개 검증 통과 (room ${roomId})`);

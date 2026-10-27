@@ -1195,6 +1195,19 @@ export async function performAction(roomId: string, token: string | null, action
       await db.query("DELETE FROM members WHERE id = $1 AND room_id = $2 AND NOT is_host", [target.id, roomId]);
       return;
     }
+
+    case "deleteRoom": {
+      requireHost(me);
+      // 모임에 딸린 참가자·카드·후보·의견·투표 기록·참여 토큰은 모두 함께 삭제(ON DELETE CASCADE).
+      // 남은 참가자는 다음 조회에서 '모임 없음'을 받고 처음 화면으로 나간다.
+      // 그 사이 방장이 넘어갔으면 아무것도 지우지 않는다.
+      const rows = await db.query(
+        "DELETE FROM rooms WHERE id = $1 AND EXISTS (SELECT 1 FROM members WHERE id = $2 AND room_id = $1 AND is_host) RETURNING id",
+        [roomId, me.id],
+      );
+      if (rows.length === 0) throw new AppError(409, "방장 정보가 바뀌었어요. 화면을 새로고침한 뒤 다시 시도해주세요.");
+      return;
+    }
   }
 }
 

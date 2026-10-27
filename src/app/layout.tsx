@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { ConfirmDialogHost } from "@/components/ui/ConfirmDialog";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -22,7 +23,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
         />
       </head>
-      <body className="flex min-h-full flex-col text-[15px] leading-relaxed">{children}</body>
+      <body className="flex min-h-full flex-col text-[15px] leading-relaxed">
+        {children}
+        <ConfirmDialogHost />
+      </body>
     </html>
   );
 }

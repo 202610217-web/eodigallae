@@ -1,10 +1,12 @@
 import { MapPin } from "lucide-react";
 import Link from "next/link";
+import { Suspense } from "react";
 import { ProfileMenu } from "@/components/account/ProfileMenu";
 import { cn } from "@/lib/client/cn";
 import { HomeActions } from "./HomeActions";
 import { HomeGuide } from "./HomeGuide";
 import { HOME_PRIMARY } from "./homeStyles";
+import { LeftRoomNotice } from "./LeftRoomNotice";
 import { MyRoomsSection } from "./MyRooms";
 
 const TAGLINE = "취향은 모으고, 결정은 함께!";
@@ -24,6 +26,10 @@ export default function HomePage() {
         </span>
         <ProfileMenu compact />
       </header>
+
+      <Suspense fallback={null}>
+        <LeftRoomNotice />
+      </Suspense>
 
       <section className="mt-6 flex flex-col gap-4 md:mt-14 md:flex-row md:items-center md:justify-between md:gap-8">
         <div>

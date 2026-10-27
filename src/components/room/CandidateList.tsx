@@ -4,6 +4,7 @@ import { ExternalLink, MapPinPlus, MessageSquareText, Pencil, Plus, Trash2 } fro
 import { useState, type CSSProperties } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
+import { confirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyState, Notice } from "@/components/ui/States";
 import { TasteTags } from "@/components/ui/TasteChip";
 import { cn } from "@/lib/client/cn";
@@ -88,7 +89,7 @@ export function CandidateList({
   const openForm = (editing: Candidate | null) => setForm((prev) => ({ editing, key: (prev?.key ?? 0) + 1 }));
 
   const remove = async (c: Candidate) => {
-    if (!window.confirm(`‘${c.name}’ 후보를 삭제할까요?`)) return;
+    if (!(await confirmDialog({ title: `‘${c.name}’ 후보를 삭제할까요?`, confirmLabel: "삭제", tone: "danger" }))) return;
     await act({ type: "deleteCandidate", candidateId: c.id });
   };
 

@@ -4,6 +4,7 @@ import { CircleCheck, Dices, EyeOff, LoaderCircle } from "lucide-react";
 import { useState } from "react";
 import { useRoom } from "@/components/room/RoomProvider";
 import { Button } from "@/components/ui/Button";
+import { confirmDialog } from "@/components/ui/ConfirmDialog";
 import { Notice } from "@/components/ui/States";
 import { TasteTags } from "@/components/ui/TasteChip";
 import { cn } from "@/lib/client/cn";
@@ -115,9 +116,17 @@ export function VotingPanel({ card }: { card: DecisionCardView }) {
           size="lg"
           block
           loading={busy && !!myVote}
-          onClick={() => {
+          onClick={async () => {
             const left = voting.eligibleVoters - voting.votedCount;
-            if (left > 0 && !window.confirm(`아직 ${left}명이 투표하지 않았어요. 지금 마감할까요?`)) return;
+            if (
+              left > 0 &&
+              !(await confirmDialog({
+                title: "지금 투표를 마감할까요?",
+                description: `아직 ${left}명이 투표하지 않았어요. 마감하면 지금까지의 표로 결과를 정해요.`,
+                confirmLabel: "마감하기",
+              }))
+            )
+              return;
             void run(() => act({ type: "closeVote", cardId: card.id }));
           }}
         >

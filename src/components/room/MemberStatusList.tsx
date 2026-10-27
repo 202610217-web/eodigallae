@@ -6,14 +6,14 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { Pill } from "@/components/ui/StatusBadge";
 import { memberProgress } from "@/lib/client/selectors";
-import { MemberManageSheet } from "./MemberManageSheet";
 import { InviteSheet } from "./RoomHeader";
 import { useRoom } from "./RoomProvider";
+import { RoomSettingsSheet } from "./RoomSettingsSheet";
 
 export function MemberStatusList() {
   const { view } = useRoom();
   const [inviteOpen, setInviteOpen] = useState(false);
-  const [manageOpen, setManageOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const progress = view.members.map((m) => ({ member: m, ...memberProgress(view, m) }));
   const readyCount = progress.filter((p) => p.ready).length;
   const alone = view.members.length < 2;
@@ -28,15 +28,15 @@ export function MemberStatusList() {
           <Pill tone={readyCount === view.members.length ? "success" : "neutral"} icon={<CircleCheck className="size-3.5" aria-hidden />}>
             {readyCount}/{view.members.length}명 의견 완료
           </Pill>
-          {view.me.isHost && !alone && (
+          {view.me.isHost && (
             <Button
               size="sm"
               variant="ghost"
               className="shrink-0 whitespace-nowrap"
               icon={<Settings2 className="size-3.5" aria-hidden />}
-              onClick={() => setManageOpen(true)}
+              onClick={() => setSettingsOpen(true)}
             >
-              관리
+              방 설정
             </Button>
           )}
         </div>
@@ -81,7 +81,7 @@ export function MemberStatusList() {
         </div>
       )}
       <InviteSheet open={inviteOpen} onClose={() => setInviteOpen(false)} />
-      {view.me.isHost && <MemberManageSheet open={manageOpen} onClose={() => setManageOpen(false)} />}
+      {view.me.isHost && <RoomSettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} />}
     </section>
   );
 }

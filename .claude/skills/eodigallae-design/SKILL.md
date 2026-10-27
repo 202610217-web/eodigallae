@@ -71,7 +71,8 @@ Tailwind 클래스로 쓴다: `bg-cream`, `text-ink-soft`, `border-line` 등.
 | `ui/Field.tsx` | `Label`(hint 가능), `TextInput`, `TextArea`, `Segmented`(단일 선택), `ToggleChip`(다중 선택, tone coral/danger), `FieldError` |
 | `ui/StatusBadge.tsx` | `Pill`(tone별 배지), `StatusBadge`, `LockedBadge`, `WaitingBadge` |
 | `ui/States.tsx` | `EmptyState`, `LoadingState`, `ErrorState`, `Notice`(info/warning/danger/success 안내 상자) |
-| `ui/Sheet.tsx` | 모바일 바텀시트 ↔ md 이상 오른쪽 패널. `size="wide"`, `footer`. 모달은 이것만 쓴다 |
+| `ui/Sheet.tsx` | 모바일 바텀시트 ↔ md 이상 오른쪽 패널. `size="wide"`, `footer`. 모달은 이것만 쓴다 (확인 창 제외) |
+| `ui/ConfirmDialog.tsx` | 확인 창. `if (!(await confirmDialog({ title, description, confirmLabel, tone: "danger" }))) return;` 브라우저 `window.confirm`/`alert`는 쓰지 않는다 |
 | `ui/BottomActionBar.tsx` | 모바일 하단 고정 주요 행동 (md 이상에서는 일반 흐름) |
 | `ui/Avatar.tsx` | 동물 캐릭터 + 참가자 색, `crown`, `style`(애니메이션 변수용) |
 | `ui/TasteChip.tsx` | 취향 칩·태그 (순위 숫자는 코랄) |

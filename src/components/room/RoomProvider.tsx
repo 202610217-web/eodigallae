@@ -1,6 +1,7 @@
 "use client";
 
 import { CircleAlert, CircleCheck } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { api, ApiError } from "@/lib/client/api";
 import type { RoomView } from "@/lib/domain/types";
@@ -27,7 +28,12 @@ interface RoomContextValue {
   toast: (text: string, tone?: Toast["tone"]) => void;
   /** 방금 확정된 카드 id (보드 카드 피드백 애니메이션용) */
   justConfirmed: string | null;
+  /** 모임 화면을 떠나 처음 화면으로 간다. 이후의 조회 결과는 무시한다. */
+  leaveRoom: (reason: LeftReason) => void;
 }
+
+/** 처음 화면(`/?left=...`)에서 안내할, 모임에서 나가게 된 이유 */
+export type LeftReason = "deleted" | "removed" | "deleted-by-me";
 
 const RoomContext = createContext<RoomContextValue | null>(null);
 
@@ -56,6 +62,17 @@ export function RoomProvider({
   const seq = useRef(0);
   const prevView = useRef<RoomView | null>(null);
   const toastId = useRef(0);
+  const left = useRef(false);
+  const router = useRouter();
+
+  const leaveRoom = useCallback(
+    (reason: LeftReason) => {
+      if (left.current) return;
+      left.current = true;
+      router.replace(`/?left=${reason}`);
+    },
+    [router],
+  );
 
   const toast = useCallback((text: string, tone: Toast["tone"] = "success") => {
     const id = ++toastId.current;
@@ -64,6 +81,7 @@ export function RoomProvider({
   }, []);
 
   const refresh = useCallback(async () => {
+    if (left.current) return;
     const mySeq = ++seq.current;
     const sentAt = Date.now();
     try {
@@ -86,14 +104,19 @@ export function RoomProvider({
       setView(next);
       setError(null);
     } catch (err) {
-      if (mySeq !== seq.current) return;
+      if (mySeq !== seq.current || left.current) return;
       const e = err instanceof ApiError ? err : new ApiError(0, "모임 정보를 불러오지 못했어요.");
+      // 보던 모임이 삭제됐거나 내보내졌으면 처음 화면으로 나간다
+      if (prevView.current && (e.code === "ROOM_NOT_FOUND" || e.code === "NOT_MEMBER")) {
+        leaveRoom(e.code === "ROOM_NOT_FOUND" ? "deleted" : "removed");
+        return;
+      }
       // 이미 화면이 있으면 일시적인 오류는 조용히 다음 조회에서 회복한다
       if (!prevView.current || e.status === 401 || e.status === 404) {
         setError({ status: e.status, message: e.message, code: e.code });
       }
     }
-  }, [roomId, toast]);
+  }, [roomId, toast, leaveRoom]);
 
   const fast =
     view?.cards.some((c) =>
@@ -135,7 +158,7 @@ export function RoomProvider({
   return (
     <>
       {view ? (
-        <RoomContext.Provider value={{ view, clockOffset, act, refresh, toast, justConfirmed }}>{children}</RoomContext.Provider>
+        <RoomContext.Provider value={{ view, clockOffset, act, refresh, toast, justConfirmed, leaveRoom }}>{children}</RoomContext.Provider>
       ) : (
         <Fallback loading={!error} error={error} retry={refresh} />
       )}
